@@ -1,0 +1,3187 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Meghbitan Homestay — Owner Booking & Room Management System</title>
+    <meta name="theme-color" content="#0f172a" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css" />
+    <!-- Google Fonts: Inter & Playfair Display -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap"
+        rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <!-- html2pdf.js for clean client-side PDF voucher download -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 9999px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* Pulse animations for statuses */
+        @keyframes softPulseRed {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.25);
+            }
+
+            50% {
+                box-shadow: 0 0 0 8px rgba(220, 38, 38, 0);
+            }
+        }
+
+        @keyframes softPulseGreen {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.25);
+            }
+
+            50% {
+                box-shadow: 0 0 0 8px rgba(22, 163, 74, 0);
+            }
+        }
+
+        .room-card-vacant {
+            animation: softPulseGreen 3s infinite;
+            transition: all 0.22s ease;
+        }
+
+        .room-card-vacant:hover {
+            transform: translateY(-3px);
+        }
+
+        .room-card-booked {
+            animation: softPulseRed 3s infinite;
+            transition: all 0.22s ease;
+        }
+
+        .room-card-booked:hover {
+            transform: translateY(-3px);
+        }
+
+        /* Print / PDF Voucher helper */
+        #voucherPrintArea {
+            background: #ffffff;
+        }
+    </style>
+</head>
+
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+
+    <div id="ownerAuthOverlay"
+        class="hidden fixed inset-0 z-[110] bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4">
+        <form onsubmit="signInOwner(event)"
+            class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8">
+            <div class="mx-auto w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-4">
+                <i class="fa-solid fa-shield-halved text-3xl text-emerald-400"></i>
+            </div>
+            <h1 class="text-2xl font-serif font-bold text-white text-center">Owner sign in</h1>
+            <p class="text-xs text-slate-400 text-center mt-2 mb-6">Sign in with the owner account configured in Firebase.</p>
+            <label class="block text-left text-xs font-semibold text-slate-300 mb-1" for="ownerEmail">Email</label>
+            <input id="ownerEmail" type="email" autocomplete="username" required
+                class="w-full rounded-xl border border-slate-700 bg-slate-800 text-white px-3 py-3 mb-4 focus:outline-none focus:border-emerald-500" />
+            <label class="block text-left text-xs font-semibold text-slate-300 mb-1" for="ownerPassword">Password</label>
+            <input id="ownerPassword" type="password" autocomplete="current-password" required
+                class="w-full rounded-xl border border-slate-700 bg-slate-800 text-white px-3 py-3 mb-4 focus:outline-none focus:border-emerald-500" />
+            <p id="ownerAuthError" class="text-xs text-rose-400 min-h-5 mb-3" role="alert"></p>
+            <button id="ownerSignInButton" type="submit"
+                class="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 transition">
+                Sign in securely
+            </button>
+            <p id="ownerAuthStatus" class="text-[11px] text-slate-500 text-center mt-4">Connecting to secure database…</p>
+        </form>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- 1. HIGH-SECURITY OWNER VAULT LOCK SCREEN (PIN + CLOUD AUTH GATE)          -->
+    <!-- ========================================================================= -->
+    <div id="securityLockOverlay"
+        class="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 select-none">
+        <div
+            class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden p-6 sm:p-8 text-center relative">
+            <!-- Top Security Badge -->
+            <div
+                class="mx-auto w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-4">
+                <i class="fa-solid fa-shield-halved text-3xl text-emerald-400"></i>
+            </div>
+            <span
+                class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-2">
+                <i class="fa-solid fa-lock"></i> RESTRICTED OWNER PORTAL
+            </span>
+            <h1 class="text-2xl font-serif font-bold text-white tracking-tight">Meghbitan Homestay</h1>
+            <p class="text-xs text-slate-400 mt-1 mb-6">Sittong, Darjeeling Hills • Private Booking System</p>
+
+            <!-- Setup or Unlock Mode Title -->
+            <div id="lockScreenModeNotice"
+                class="bg-slate-800/80 border border-slate-700/70 rounded-xl p-3 mb-5 text-left">
+                <div class="flex items-start gap-2.5">
+                    <i id="lockModeIcon" class="fa-solid fa-key text-emerald-400 mt-0.5"></i>
+                    <div>
+                        <p id="lockModeTitle" class="text-xs font-semibold text-white">Enter Master Security PIN</p>
+                        <p id="lockModeSubtitle" class="text-[11px] text-slate-400 leading-relaxed">
+                            Protected against unauthorized access. First-time default PIN is <span
+                                class="text-emerald-400 font-mono font-bold">1234</span> (you can customize it inside
+                            Settings).
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4-Digit Dots Display -->
+            <div class="flex justify-center gap-3.5 my-5" id="pinDotsContainer">
+                <div class="w-12 h-14 rounded-xl bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-2xl font-bold text-white"
+                    id="pinDot0">•</div>
+                <div class="w-12 h-14 rounded-xl bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-2xl font-bold text-white"
+                    id="pinDot1">•</div>
+                <div class="w-12 h-14 rounded-xl bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-2xl font-bold text-white"
+                    id="pinDot2">•</div>
+                <div class="w-12 h-14 rounded-xl bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-2xl font-bold text-white"
+                    id="pinDot3">•</div>
+            </div>
+
+            <p id="pinErrorMsg" class="text-xs font-medium text-rose-400 h-4 mb-3"></p>
+
+            <!-- Interactive Keypad -->
+            <div class="grid grid-cols-3 gap-2.5 max-w-xs mx-auto">
+                <button onclick="pressPinKey('1')"
+                    class="h-13 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-semibold text-lg transition border border-slate-700/60">1</button>
+                <button onclick="pressPinKey('2')"
+                    class="h-13 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-semibold text-lg transition border border-slate-700/60">2</button>
+                <button onclick="pressPinKey('3')"
+                    class="h-13 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-semibold text-lg transition border border-slate-700/60">3</button>
+                <button onclick="pressPinKey('4')"
+                    class="h-13 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-semibold text-lg transition border border-slate-700/60">4</button>
+                <button onclick="pressPinKey('5')"
+                    class="h-13 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-semibold text-lg transition border border-slate-700/60">5</button>
+                <button onclick="pressPinKey('6')"
+                    class="h-13 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-semibold text-lg transition border border-slate-700/60">6</button>
+                <button onclick="pressPinKey('7')"
+                    class="h-13 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-semibold text-lg transition border border-slate-700/60">7</button>
+                <button onclick="pressPinKey('8')"
+                    class="h-13 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-semibold text-lg transition border border-slate-700/60">8</button>
+                <button onclick="pressPinKey('9')"
+                    class="h-13 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-semibold text-lg transition border border-slate-700/60">9</button>
+                <button onclick="clearPinInput()"
+                    class="h-13 py-3 rounded-xl bg-rose-950/60 hover:bg-rose-900/70 text-rose-300 font-medium text-xs transition border border-rose-800/50">CLEAR</button>
+                <button onclick="pressPinKey('0')"
+                    class="h-13 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-semibold text-lg transition border border-slate-700/60">0</button>
+                <button onclick="backspacePinKey()"
+                    class="h-13 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-sm transition border border-slate-700/60">
+                    <i class="fa-solid fa-delete-left"></i>
+                </button>
+            </div>
+
+            <div
+                class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                <span id="authStatusBadge" class="inline-flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> Connecting Cloud Vault...
+                </span>
+                <span class="font-mono text-slate-500" id="ownerUidShort">Encrypted Session</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- 2. TOP NAVIGATION BAR & NOTIFICATION CENTER                               -->
+    <!-- ========================================================================= -->
+    <header class="sticky top-0 z-40 bg-slate-900 text-white shadow-lg border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
+            <!-- Brand Identity -->
+            <div class="flex items-center gap-3">
+                <div
+                    class="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center shadow-md shadow-emerald-900/50">
+                    <i class="fa-solid fa-mountain-sun text-xl text-white"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg sm:text-xl font-serif font-bold tracking-tight text-white">Meghbitan</h1>
+                        <span
+                            class="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            <i class="fa-solid fa-shield-check"></i> Owner Verified
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400">Booking & Room Status Tracker • 3 Properties (8 Rooms)</p>
+                </div>
+            </div>
+
+            <!-- Right Actions: New Booking, Notification Bell, Security Settings, Lock -->
+            <div class="flex items-center gap-2 sm:gap-3">
+                <!-- Quick Add Booking -->
+                <button onclick="openBookingModalForNew([])"
+                    class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm shadow-sm transition active:scale-95">
+                    <i class="fa-solid fa-calendar-plus"></i>
+                    <span>+ New Booking</span>
+                </button>
+
+                <!-- Notification Reminder Bell -->
+                <div class="relative">
+                    <button onclick="toggleNotificationDrawer()"
+                        class="relative p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+                        title="Arrival Reminders & Alerts">
+                        <i class="fa-solid fa-bell text-base"></i>
+                        <span id="notifBadgeCount"
+                            class="hidden absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center border-2 border-slate-900">0</span>
+                    </button>
+                </div>
+
+                <!-- Change PIN / Security Settings -->
+                <button onclick="openSecurityModal()"
+                    class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
+                    title="Security PIN & Notification Settings">
+                    <i class="fa-solid fa-gear text-base"></i>
+                </button>
+                <button onclick="signOutOwner()"
+                    class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
+                    title="Sign out">
+                    <i class="fa-solid fa-right-from-bracket text-base"></i>
+                </button>
+
+                <!-- Immediate Lock Button -->
+                <button onclick="lockSystemNow()"
+                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-semibold transition"
+                    title="Lock System Immediately">
+                    <i class="fa-solid fa-lock"></i>
+                    <span class="hidden md:inline">Lock</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ========================================================================= -->
+    <!-- 3. NOTIFICATION & REMINDER DRAWER (1-DAY PRIOR + CUSTOM TIMED ALERTS)     -->
+    <!-- ========================================================================= -->
+    <div id="notificationDrawer" class="hidden fixed inset-0 z-50 overflow-hidden bg-slate-900/50 backdrop-blur-xs">
+        <div class="absolute inset-y-0 right-0 max-w-full flex pl-10">
+            <div class="w-screen max-w-md bg-white shadow-2xl flex flex-col justify-between">
+                <!-- Drawer Header -->
+                <div class="p-5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+                    <div class="flex items-center gap-2.5">
+                        <div
+                            class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                            <i class="fa-solid fa-bell"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-base">Arrival Reminders & Alerts</h3>
+                            <p class="text-xs text-slate-400">1-Day Prior & Custom Scheduled Alerts</p>
+                        </div>
+                    </div>
+                    <button onclick="toggleNotificationDrawer()"
+                        class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+
+                <!-- Browser Push / Sound Permission Bar -->
+                <div class="p-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2 text-xs text-slate-700">
+                        <i class="fa-solid fa-volume-high text-emerald-600"></i>
+                        <span id="browserNotifStatusText">Device Push & Sound Alerts Ready</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="requestBrowserNotificationPermission()"
+                            class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold transition">
+                            Enable Device Alerts
+                        </button>
+                        <button onclick="triggerTestNotification()"
+                            class="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-[11px] font-semibold transition">
+                            Test Alert
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Reminder List Body -->
+                <div id="reminderListContainer" class="flex-1 overflow-y-auto p-4 space-y-3">
+                    <!-- Populated dynamically via JS -->
+                </div>
+
+                <!-- Drawer Footer -->
+                <div
+                    class="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
+                    <span>Free scheduled push checks run about every five minutes</span>
+                    <button onclick="acknowledgeAllTriggeredReminders()"
+                        class="font-semibold text-emerald-700 hover:underline">
+                        Mark All Due as Read
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- 4. MAIN OWNER DASHBOARD CONTENT                                           -->
+    <!-- ========================================================================= -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- URGENT ARRIVAL REMINDER BANNER (Shown when guests arrive tomorrow or due reminders exist) -->
+        <div id="urgentArrivalBanner"
+            class="hidden rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 p-0.5 shadow-lg">
+            <div
+                class="bg-slate-900/95 text-white rounded-[14px] px-4 py-3 sm:px-5 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <span
+                        class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 shrink-0">
+                        <i class="fa-solid fa-bell animate-bounce"></i>
+                    </span>
+                    <div>
+                        <p class="text-xs sm:text-sm font-bold text-amber-300" id="urgentBannerHeadline">Upcoming Guest
+                            Arrival Alert</p>
+                        <p class="text-xs text-slate-300" id="urgentBannerSubtext">You have scheduled reminders
+                            requiring attention.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleNotificationDrawer()"
+                        class="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition">
+                        View Reminders
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TOP DATE CONTROL BAR & KPI SUMMARY CARDS -->
+        <section class="bg-white rounded-3xl shadow-sm border border-slate-200/80 p-4 sm:p-6">
+            <div
+                class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-5 border-b border-slate-100">
+                <!-- Date Selector Controls -->
+                <div>
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-700 block mb-1">
+                        <i class="fa-regular fa-calendar-check mr-1"></i> Live Room Availability & Occupancy Inspector
+                    </span>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="shiftSelectedDate(-1)"
+                            class="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition"
+                            title="Previous Day">
+                            <i class="fa-solid fa-chevron-left text-xs"></i>
+                        </button>
+                        <input type="date" id="selectedDatePicker" onchange="handleDateChange(this.value)"
+                            class="px-3.5 py-2 rounded-xl border-2 border-slate-200 focus:border-emerald-600 focus:outline-none font-bold text-slate-800 text-sm bg-slate-50" />
+                        <button onclick="shiftSelectedDate(1)"
+                            class="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition"
+                            title="Next Day">
+                            <i class="fa-solid fa-chevron-right text-xs"></i>
+                        </button>
+
+                        <button onclick="setQuickDate(0)" id="btnQuickToday"
+                            class="px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white transition">
+                            Today
+                        </button>
+                        <button onclick="setQuickDate(1)" id="btnQuickTomorrow"
+                            class="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+                            Tomorrow
+                        </button>
+                        <span id="selectedDateReadable"
+                            class="text-xs sm:text-sm font-medium text-slate-500 ml-1"></span>
+                    </div>
+                </div>
+
+                <!-- View Switcher Tabs -->
+                <div class="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl self-start lg:self-auto">
+                    <button onclick="switchMainTab('rooms')" id="tabBtnRooms"
+                        class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-slate-900 shadow-xs transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-door-open text-emerald-600"></i> Room Grid (Green/Red)
+                    </button>
+                    <button onclick="switchMainTab('timeline')" id="tabBtnTimeline"
+                        class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-calendar-week text-indigo-600"></i> 7-Day Matrix
+                    </button>
+                    <button onclick="switchMainTab('bookings')" id="tabBtnBookings"
+                        class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-list-check text-amber-600"></i> All Bookings (<span
+                            id="totalBookingsCountTab">0</span>)
+                    </button>
+                </div>
+            </div>
+
+            <!-- 5 KPI Summary Pills -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-5">
+                <!-- Total Rooms -->
+                <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center justify-between">
+                    <div>
+                        <p class="text-[11px] font-semibold text-slate-500 uppercase">Total Rooms</p>
+                        <p class="text-2xl font-extrabold text-slate-800 mt-0.5">8 <span
+                                class="text-xs font-normal text-slate-500">Max ~34 Pax</span></p>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-slate-200/70 text-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-hotel"></i>
+                    </div>
+                </div>
+
+                <!-- Vacant Rooms (GREEN) -->
+                <div
+                    class="p-3.5 rounded-2xl bg-emerald-50 border-2 border-emerald-500/30 flex items-center justify-between">
+                    <div>
+                        <p class="text-[11px] font-bold text-emerald-800 uppercase flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-emerald-600"></span> Vacant (Green)
+                        </p>
+                        <p class="text-2xl font-extrabold text-emerald-700 mt-0.5" id="kpiVacantCount">8</p>
+                    </div>
+                    <div
+                        class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                        <i class="fa-solid fa-check"></i>
+                    </div>
+                </div>
+
+                <!-- Occupied Rooms (RED) -->
+                <div class="p-3.5 rounded-2xl bg-rose-50 border-2 border-rose-500/30 flex items-center justify-between">
+                    <div>
+                        <p class="text-[11px] font-bold text-rose-800 uppercase flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-rose-600"></span> Occupied (Red)
+                        </p>
+                        <p class="text-2xl font-extrabold text-rose-700 mt-0.5" id="kpiBookedCount">0</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-xs">
+                        <i class="fa-solid fa-bed"></i>
+                    </div>
+                </div>
+
+                <!-- Arrivals Tomorrow (1-Day Prior Focus) -->
+                <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-300/60 flex items-center justify-between">
+                    <div>
+                        <p class="text-[11px] font-bold text-amber-900 uppercase">Arriving Tomorrow</p>
+                        <p class="text-2xl font-extrabold text-amber-700 mt-0.5" id="kpiTomorrowArrivals">0</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center">
+                        <i class="fa-solid fa-plane-arrival"></i>
+                    </div>
+                </div>
+
+                <!-- Active Reminders Scheduled -->
+                <div class="col-span-2 sm:col-span-1 p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-between cursor-pointer hover:bg-indigo-100/70 transition"
+                    onclick="toggleNotificationDrawer()">
+                    <div>
+                        <p class="text-[11px] font-bold text-indigo-900 uppercase">Active Reminders</p>
+                        <p class="text-2xl font-extrabold text-indigo-700 mt-0.5" id="kpiPendingReminders">0</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-700 flex items-center justify-center">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================================= -->
+        <!-- TAB 1: VISUAL ROOM STATUS GRID (3 ACCOMMODATION CATEGORIES)             -->
+        <!-- ======================================================================= -->
+        <section id="sectionRoomsGrid" class="space-y-6">
+            <!-- Legend & Quick Instructions -->
+            <div class="flex flex-wrap items-center justify-between gap-3 px-1">
+                <div class="flex flex-wrap items-center gap-4 text-xs font-semibold">
+                    <span
+                        class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300">
+                        <span class="w-3 h-3 rounded-full bg-emerald-600"></span> GREEN = Vacant (Click Room to Book)
+                    </span>
+                    <span
+                        class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-rose-100 text-rose-900 border border-rose-300">
+                        <span class="w-3 h-3 rounded-full bg-rose-600"></span> RED = Booked (Click to View / PDF /
+                        Share)
+                    </span>
+                </div>
+                <p class="text-xs text-slate-500">
+                    <i class="fa-solid fa-hand-pointer mr-1 text-emerald-600"></i> Click any room card below to manage
+                    guest details or download voucher
+                </p>
+            </div>
+
+            <!-- Dynamic 3 Accommodation Sections Container -->
+            <div id="accommodationsContainer" class="space-y-6">
+                <!-- Populated dynamically by renderAccommodationsGrid() -->
+            </div>
+        </section>
+
+        <!-- ======================================================================= -->
+        <!-- TAB 2: 7-DAY MULTI-ROOM AVAILABILITY MATRIX                             -->
+        <!-- ======================================================================= -->
+        <section id="sectionTimelineMatrix"
+            class="hidden bg-white rounded-3xl shadow-sm border border-slate-200 p-4 sm:p-6">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900">7-Day Room Occupancy Matrix</h2>
+                    <p class="text-xs text-slate-500">Click any Green cell to create a booking for that room & date, or
+                        click a Red cell to open the booking.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="shiftSelectedDate(-7)"
+                        class="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-xs font-semibold">
+                        <i class="fa-solid fa-angles-left mr-1"></i> Prev 7 Days
+                    </button>
+                    <button onclick="shiftSelectedDate(7)"
+                        class="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-xs font-semibold">
+                        Next 7 Days <i class="fa-solid fa-angles-right ml-1"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="overflow-x-auto" id="timelineTableWrapper">
+                <!-- Populated dynamically -->
+            </div>
+        </section>
+
+        <!-- ======================================================================= -->
+        <!-- TAB 3: ALL BOOKINGS DIRECTORY, SEARCH & REMINDER LOGS                   -->
+        <!-- ======================================================================= -->
+        <section id="sectionBookingsDirectory"
+            class="hidden bg-white rounded-3xl shadow-sm border border-slate-200 p-4 sm:p-6 space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900">All Guest Bookings Directory</h2>
+                    <p class="text-xs text-slate-500">Search by Guest Name, Phone, Booking ID, or filter by upcoming
+                        arrivals</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="relative">
+                        <i
+                            class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="bookingSearchInput" oninput="renderBookingsDirectory()"
+                            placeholder="Search this page: guest, phone, room..."
+                            class="pl-8 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-emerald-600 w-56" />
+                    </div>
+                    <select id="bookingStatusFilter" onchange="resetBookingDirectory()"
+                        class="px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold bg-slate-50">
+                        <option value="ALL">All Bookings</option>
+                        <option value="UPCOMING">Upcoming & Active</option>
+                        <option value="TOMORROW">Arriving Tomorrow</option>
+                        <option value="PAST">Past Check-outs</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr
+                            class="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase bg-slate-50">
+                            <th class="py-3 px-3 rounded-tl-xl">Booking ID & Guest</th>
+                            <th class="py-3 px-3">Accommodation / Rooms</th>
+                            <th class="py-3 px-3">Check-In → Check-Out</th>
+                            <th class="py-3 px-3">Pax & Meal</th>
+                            <th class="py-3 px-3">Tariff & Balance</th>
+                            <th class="py-3 px-3">Reminders Set</th>
+                            <th class="py-3 px-3 text-right rounded-tr-xl">Quick Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bookingsTableBody" class="divide-y divide-slate-100 text-xs">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="flex items-center justify-between gap-3 pt-4 text-xs">
+                <span id="bookingPageStatus" class="text-slate-500">Sign in to load booking records.</span>
+                <div class="flex gap-2">
+                    <button type="button" id="previousBookingsPageButton" onclick="changeBookingPage(-1)"
+                        class="px-3 py-2 rounded-lg border border-slate-200 text-slate-700 disabled:opacity-40" disabled>Previous</button>
+                    <button type="button" id="nextBookingsPageButton" onclick="changeBookingPage(1)"
+                        class="px-3 py-2 rounded-lg border border-slate-200 text-slate-700 disabled:opacity-40" disabled>Next</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ========================================================================= -->
+    <!-- 5. EASY ONE-CLICK BOOKING & GUEST DETAILS MODAL (WITH CUSTOM REMINDERS)   -->
+    <!-- ========================================================================= -->
+    <div id="bookingFormModal"
+        class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5">
+        <div
+            class="bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="px-5 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-3">
+                    <div
+                        class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-400">
+                        <i class="fa-solid fa-calendar-check text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 id="bookingModalTitle" class="font-bold text-base sm:text-lg">New Room Booking — Meghbitan
+                        </h3>
+                        <p id="bookingModalSubtitle" class="text-xs text-slate-400">Fill in guest details, room
+                            selection & optional arrival reminders</p>
+                    </div>
+                </div>
+                <button onclick="closeBookingModal()"
+                    class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Modal Scrollable Body -->
+            <form id="bookingForm" onsubmit="saveBookingForm(event)"
+                class="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1">
+                <input type="hidden" id="editingBookingId" value="" />
+
+                <!-- SECTION A: ROOM SELECTION (Supports single or multi-room / full cottage) -->
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <label
+                            class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-door-closed text-emerald-600"></i> 1. Select Room(s) to Book *
+                        </label>
+                        <div class="flex flex-wrap gap-1.5">
+                            <button type="button" onclick="selectEntireCategory('OGC')"
+                                class="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[11px] font-semibold transition">
+                                + Entire Octagonal Cottage (3 Rooms / 10-12 Pax)
+                            </button>
+                            <button type="button" onclick="selectEntireCategory('LH')"
+                                class="px-2.5 py-1 rounded-lg bg-indigo-100 hover:bg-indigo-200 text-indigo-800 text-[11px] font-semibold transition">
+                                + Entire Luxury House (3 Rooms)
+                            </button>
+                            <button type="button" onclick="selectEntireCategory('WC')"
+                                class="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 text-[11px] font-semibold transition">
+                                + Entire Wooden Cottage (2 Rooms)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="modalRoomCheckboxes" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                        <!-- Populated dynamically with all 8 rooms -->
+                    </div>
+                    <p id="roomConflictWarning"
+                        class="hidden mt-2.5 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
+                    </p>
+                </div>
+
+                <!-- SECTION B: STAY DATES & GUEST DETAILS -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Check-In Date *</label>
+                        <input type="date" id="formCheckIn" required onchange="validateModalRoomConflicts()"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-emerald-600 focus:outline-none text-sm font-semibold" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Check-Out Date *</label>
+                        <input type="date" id="formCheckOut" required onchange="validateModalRoomConflicts()"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-emerald-600 focus:outline-none text-sm font-semibold" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Total Guests (Pax) *</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="formGuestsCount" min="1" max="40" value="2" required
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-emerald-600 focus:outline-none text-sm font-semibold"
+                                placeholder="e.g. 4" />
+                            <span class="text-xs text-slate-500 shrink-0" id="selectedRoomsCapacityHint">Cap: 4</span>
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Primary Guest Full Name *</label>
+                        <input type="text" id="formGuestName" required placeholder="e.g. Subhajit Chatterjee"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-emerald-600 focus:outline-none text-sm" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Phone / WhatsApp No. *</label>
+                        <input type="tel" id="formGuestPhone" required placeholder="e.g. 9830012345"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-emerald-600 focus:outline-none text-sm" />
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Guest City / Address
+                            (Optional)</label>
+                        <input type="text" id="formGuestAddress" placeholder="e.g. Kolkata, WB"
+                            class="w-full px-3.5 py-2 rounded-xl border border-slate-300 focus:border-emerald-600 focus:outline-none text-sm" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">ID Proof Type / Note
+                            (Optional)</label>
+                        <input type="text" id="formGuestIdProof" placeholder="Aadhaar / Voter ID / Driving Lic"
+                            class="w-full px-3.5 py-2 rounded-xl border border-slate-300 focus:border-emerald-600 focus:outline-none text-sm" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Meal / Package Plan</label>
+                        <select id="formMealPlan"
+                            class="w-full px-3.5 py-2 rounded-xl border border-slate-300 focus:border-emerald-600 focus:outline-none text-sm bg-white">
+                            <option value="All Meals Included (Homestay AP Plan)">All Meals (Homestay AP Plan)</option>
+                            <option value="Breakfast & Dinner (MAP Plan)">Breakfast & Dinner (MAP)</option>
+                            <option value="Breakfast Only (CP Plan)">Breakfast Only (CP)</option>
+                            <option value="Room Only (EP Plan)">Room Only (EP)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- SECTION C: TARIFF, ADVANCE & PAYMENT DETAILS -->
+                <div
+                    class="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/80 grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Total Tariff Amount (₹) *</label>
+                        <input type="number" id="formTotalAmount" min="0" value="4500" required
+                            oninput="updateBalanceCalculation()"
+                            class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm font-bold text-slate-900" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Advance Received (₹)</label>
+                        <input type="number" id="formAdvancePaid" min="0" value="2000"
+                            oninput="updateBalanceCalculation()"
+                            class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm font-bold text-emerald-700" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Balance Due at Check-In (₹)</label>
+                        <input type="text" id="formBalanceDue" readonly value="₹2,500"
+                            class="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-sm font-extrabold text-rose-600" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Payment Mode</label>
+                        <select id="formPaymentMode"
+                            class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm">
+                            <option value="UPI / GPay / PhonePe">UPI / GPay / PhonePe</option>
+                            <option value="Bank Account Transfer">Bank Transfer (NEFT/IMPS)</option>
+                            <option value="Cash">Cash</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-4">
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Special Requests / Owner Notes
+                            (Optional)</label>
+                        <input type="text" id="formSpecialNotes"
+                            placeholder="e.g. Bonfire & Barbeque requested, arriving around 2:00 PM from NJP..."
+                            class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs" />
+                    </div>
+                </div>
+
+                <!-- =================================================================== -->
+                <!-- SECTION D: ARRIVAL NOTIFICATION & OPTIONAL CUSTOM REMINDER BUILDER  -->
+                <!-- =================================================================== -->
+                <div class="bg-amber-50/70 rounded-2xl border border-amber-300/80 p-4 space-y-4">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center">
+                                <i class="fa-solid fa-bell"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-xs sm:text-sm font-bold text-slate-900">Arrival Notification & Optional
+                                    Custom Reminders</h4>
+                                <p class="text-[11px] text-slate-600">Get notified before guest arrival. All reminder
+                                    settings below are completely optional.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Standard 1-Day Prior Notification Toggle (Enabled by default as requested, optional to uncheck) -->
+                    <div
+                        class="bg-white p-3.5 rounded-xl border border-amber-200 flex flex-wrap items-center justify-between gap-3">
+                        <label class="flex items-center gap-2.5 cursor-pointer">
+                            <input type="checkbox" id="formDefaultOneDayReminder" checked
+                                class="w-4 h-4 accent-emerald-600 rounded" />
+                            <div>
+                                <span class="text-xs font-bold text-slate-800 block">Standard 1-Day Before Arrival Alert
+                                    (Recommended)</span>
+                                <span class="text-[11px] text-slate-500">Automatically alerts you 1 day prior to guest
+                                    check-in date</span>
+                            </div>
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-semibold text-slate-600">Alert Time:</span>
+                            <input type="time" id="formDefaultOneDayTime" value="09:00"
+                                class="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-800" />
+                        </div>
+                    </div>
+
+                    <!-- OPTIONAL Custom Multi-Reminder Toggle & Dynamic Rows -->
+                    <div class="bg-white p-3.5 rounded-xl border border-slate-200">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <label class="flex items-center gap-2.5 cursor-pointer">
+                                <input type="checkbox" id="formEnableCustomReminders"
+                                    onchange="toggleCustomRemindersSection()"
+                                    class="w-4 h-4 accent-indigo-600 rounded" />
+                                <div>
+                                    <span class="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                                        <span>Optional: Add Custom Reminders (Choose How Many, Days Prior &
+                                            Timing)</span>
+                                        <span
+                                            class="px-2 py-0.5 rounded-full text-[10px] bg-indigo-100 text-indigo-700 font-semibold">OPTIONAL</span>
+                                    </span>
+                                    <span class="text-[11px] text-slate-500">Schedule 1, 2, 3 or more extra reminders
+                                        for any number of days before arrival at your preferred time</span>
+                                </div>
+                            </label>
+                        </div>
+
+                        <!-- Collapsible Custom Reminder Controls -->
+                        <div id="customRemindersBuilderBox"
+                            class="hidden mt-4 pt-3 border-t border-slate-100 space-y-3">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-semibold text-slate-700">How many custom reminders?</span>
+                                    <select id="customReminderCountSelect" onchange="setCustomReminderCount(this.value)"
+                                        class="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-bold bg-slate-50">
+                                        <option value="1">1 Custom Reminder</option>
+                                        <option value="2">2 Custom Reminders</option>
+                                        <option value="3">3 Custom Reminders</option>
+                                        <option value="4">4 Custom Reminders</option>
+                                    </select>
+                                </div>
+                                <button type="button" onclick="addCustomReminderRow()"
+                                    class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold transition">
+                                    <i class="fa-solid fa-plus mr-1"></i> Add Another Reminder
+                                </button>
+                            </div>
+
+                            <!-- Dynamic Rows for Custom Reminders (Days Prior + Exact Time + Note) -->
+                            <div id="customReminderRowsContainer" class="space-y-2">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal Footer Actions -->
+                <div class="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200">
+                    <div id="deleteBookingBtnWrapper" class="hidden">
+                        <button type="button" onclick="confirmDeleteBooking()"
+                            class="px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs border border-rose-200 transition">
+                            <i class="fa-solid fa-trash-can mr-1"></i> Cancel / Vacate Booking
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-2.5 ml-auto">
+                        <button type="button" onclick="closeBookingModal()"
+                            class="px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-xs sm:text-sm transition">
+                            Close
+                        </button>
+                        <button type="submit" id="saveBookingSubmitBtn"
+                            class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition flex items-center gap-2">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span>Save Booking & Generate Voucher</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- 6. BOOKING CONFIRMATION VOUCHER / PDF RECEIPT & DIRECT SHARING MODAL      -->
+    <!-- ========================================================================= -->
+    <div id="voucherPreviewModal"
+        class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5">
+        <div
+            class="bg-slate-100 w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-300 overflow-hidden my-auto max-h-[94vh] flex flex-col">
+            <!-- Top Action Bar (Download PDF, Share from UI, WhatsApp, Edit) -->
+            <div class="px-5 py-3.5 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-2 shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                    <h3 class="font-bold text-sm sm:text-base">Booking Voucher Ready</h3>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <!-- Download PDF Button -->
+                    <button onclick="downloadVoucherPDF()" id="btnDownloadPdf"
+                        class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition">
+                        <i class="fa-solid fa-file-pdf"></i> Download PDF
+                    </button>
+                    <!-- Native Share from UI (PDF File / Summary) -->
+                    <button onclick="shareBookingFromUI()"
+                        class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition">
+                        <i class="fa-solid fa-share-nodes"></i> Share from UI
+                    </button>
+                    <!-- Direct WhatsApp Share -->
+                    <button onclick="shareBookingOnWhatsApp()"
+                        class="px-3.5 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition">
+                        <i class="fa-brands fa-whatsapp text-sm"></i> WhatsApp Guest
+                    </button>
+                    <!-- Edit Booking -->
+                    <button onclick="editCurrentVoucherBooking()"
+                        class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition">
+                        <i class="fa-solid fa-pen-to-square mr-1"></i> Edit
+                    </button>
+                    <button onclick="closeVoucherModal()" class="p-2 rounded-xl text-slate-400 hover:text-white">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Printable Voucher Area -->
+            <div class="p-4 sm:p-6 overflow-y-auto flex-1">
+                <div id="voucherPrintArea"
+                    class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-xs text-slate-800 space-y-6">
+                    <!-- Voucher Header -->
+                    <div
+                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b-2 border-emerald-700">
+                        <div>
+                            <div class="flex items-center gap-2.5">
+                                <div
+                                    class="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-serif font-bold text-xl">
+                                    M
+                                </div>
+                                <div>
+                                    <h2 class="text-2xl font-serif font-bold text-slate-900 tracking-tight">MEGHBITAN
+                                        HOMESTAY</h2>
+                                    <p class="text-xs text-slate-500 font-medium">Sittong, Kurseong Sub-Division,
+                                        Darjeeling, West Bengal</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-left sm:text-right">
+                            <span
+                                class="inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs uppercase tracking-wider">
+                                CONFIRMED BOOKING VOUCHER
+                            </span>
+                            <p class="text-xs font-mono font-bold text-slate-700 mt-1.5" id="vBookingId">Booking ID:
+                                #MB-0000</p>
+                            <p class="text-[11px] text-slate-400" id="vIssuedDate">Issued: --</p>
+                        </div>
+                    </div>
+
+                    <!-- Guest & Stay Grid -->
+                    <div
+                        class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                        <div>
+                            <p class="text-[10px] font-bold uppercase text-slate-400">Primary Guest Details</p>
+                            <p class="text-base font-bold text-slate-900 mt-0.5" id="vGuestName">--</p>
+                            <p class="text-xs text-slate-600 mt-0.5" id="vGuestPhone">--</p>
+                            <p class="text-xs text-slate-500 mt-0.5" id="vGuestAddress">--</p>
+                        </div>
+                        <div class="sm:border-l sm:border-slate-200 sm:pl-4">
+                            <p class="text-[10px] font-bold uppercase text-slate-400">Stay Schedule & Pax</p>
+                            <div class="grid grid-cols-2 gap-2 mt-1">
+                                <div>
+                                    <span class="text-[11px] text-slate-500 block">Check-In:</span>
+                                    <span class="text-xs font-extrabold text-emerald-700" id="vCheckIn">--</span>
+                                </div>
+                                <div>
+                                    <span class="text-[11px] text-slate-500 block">Check-Out:</span>
+                                    <span class="text-xs font-extrabold text-rose-700" id="vCheckOut">--</span>
+                                </div>
+                            </div>
+                            <p class="text-xs font-semibold text-slate-700 mt-2" id="vNightsAndPax">--</p>
+                        </div>
+                    </div>
+
+                    <!-- Accommodation & Rooms Booked -->
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Booked Accommodation &
+                            Room Allocation</p>
+                        <div id="vRoomsList" class="space-y-2">
+                            <!-- Populated dynamically -->
+                        </div>
+                        <p class="text-xs font-semibold text-emerald-800 mt-2.5 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-200 inline-block"
+                            id="vMealPlan">
+                            Meal Plan: --
+                        </p>
+                    </div>
+
+                    <!-- Payment & Tariff Breakdown Table -->
+                    <div class="border border-slate-200 rounded-2xl overflow-hidden">
+                        <div
+                            class="bg-slate-800 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex justify-between">
+                            <span>Payment & Tariff Summary</span>
+                            <span id="vPaymentMode">Mode: UPI</span>
+                        </div>
+                        <div class="p-4 space-y-2 text-xs sm:text-sm">
+                            <div class="flex justify-between py-1 border-b border-slate-100">
+                                <span class="text-slate-600 font-medium">Total Package / Room Tariff</span>
+                                <span class="font-bold text-slate-900" id="vTotalTariff">₹0</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-slate-100">
+                                <span class="text-emerald-700 font-medium">Advance Deposit Paid</span>
+                                <span class="font-bold text-emerald-700" id="vAdvancePaid">- ₹0</span>
+                            </div>
+                            <div class="flex justify-between py-2 bg-rose-50 px-3 rounded-xl border border-rose-200/80">
+                                <span class="font-extrabold text-rose-900">Balance Payable at Homestay</span>
+                                <span class="font-extrabold text-base text-rose-700" id="vBalanceDue">₹0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notes & Homestay Guidelines -->
+                    <div
+                        class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200 text-[11px] text-slate-500">
+                        <div>
+                            <p class="font-bold text-slate-700 mb-1">Special Notes / Requests:</p>
+                            <p id="vSpecialNotes" class="italic text-slate-600">None</p>
+                        </div>
+                        <div>
+                            <p class="font-bold text-slate-700 mb-1">Important Homestay Info:</p>
+                            <p>• Standard Check-In: 12:00 PM | Check-Out: 10:30 AM</p>
+                            <p>• Please carry original Government Photo ID for all guests.</p>
+                            <p>• Thank you for choosing Meghbitan Homestay!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- 7. OWNER SECURITY PIN & NOTIFICATION SETTINGS MODAL                       -->
+    <!-- ========================================================================= -->
+    <div id="securitySettingsModal"
+        class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div class="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <i class="fa-solid fa-user-shield text-emerald-400 text-lg"></i>
+                    <h3 class="font-bold text-base">Owner Security & PIN Settings</h3>
+                </div>
+                <button onclick="closeSecurityModal()" class="text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <form onsubmit="saveNewMasterPin(event)" class="p-5 space-y-4">
+                <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
+                    <p class="font-bold text-slate-800"><i class="fa-solid fa-lock text-emerald-600 mr-1"></i> Private
+                        Cloud Encryption</p>
+                    <p>All bookings are stored strictly under your private authenticated owner path and protected by
+                        your 4-digit Master Security PIN.</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Current 4-Digit Master PIN *</label>
+                    <input type="password" id="currentPinInput" maxlength="4" pattern="\d{4}" required
+                        placeholder="••••"
+                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-center font-mono text-lg tracking-widest" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">New 4-Digit Master PIN *</label>
+                    <input type="password" id="newPinInput" maxlength="4" pattern="\d{4}" required
+                        placeholder="Enter 4 digits (e.g. 2580)"
+                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-center font-mono text-lg tracking-widest" />
+                </div>
+
+                <p id="pinChangeFeedback" class="text-xs font-semibold text-center"></p>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeSecurityModal()"
+                        class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700">Cancel</button>
+                    <button type="submit"
+                        class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">Update
+                        Security PIN</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- 8. CUSTOM CONFIRMATION MODAL & TOAST ALERT CONTAINER                      -->
+    <!-- ========================================================================= -->
+    <div id="customConfirmModal"
+        class="hidden fixed inset-0 z-[90] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-200 text-center space-y-4">
+            <div class="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+                <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <h4 class="font-bold text-base text-slate-900" id="confirmModalTitle">Confirm Action</h4>
+            <p class="text-xs text-slate-600" id="confirmModalMessage">Are you sure?</p>
+            <div class="flex items-center justify-center gap-2.5 pt-2">
+                <button onclick="closeCustomConfirm()"
+                    class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700">Keep
+                    Booking</button>
+                <button id="confirmModalAcceptBtn"
+                    class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold">Yes, Vacate
+                    Room</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Toast Container -->
+    <div id="toastContainer"
+        class="fixed bottom-4 right-4 z-[95] space-y-2.5 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+    <!-- ========================================================================= -->
+    <!-- 9. APPLICATION LOGIC & FIREBASE CLOUD PERSISTENCE                         -->
+    <!-- ========================================================================= -->
+    <script src="./firebase-config.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, runTransaction, query, where, Timestamp, getDocs, orderBy, startAfter, limit, getCountFromServer } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getMessaging, getToken, isSupported, onMessage } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging.js";
+
+        // -------------------------------------------------------------------------
+        // MEGHBITAN HOMESTAY — STATIC ACCOMMODATION & ROOM ARCHITECTURE (8 ROOMS)
+        // -------------------------------------------------------------------------
+        const ACCOMMODATION_TYPES = [
+            {
+                id: 'OGC',
+                name: 'Octagonal Glass Cottage',
+                tagline: 'Panoramic Glass Cottage • 3 Rooms • Total 10–12 Guests Accommodation',
+                badgeText: '10–12 Guests Total Capacity',
+                icon: 'fa-gem',
+                accentColor: 'emerald',
+                allowWholeCottage: true,
+                rooms: [
+                    { id: 'OGC-1', code: 'OGC-1', name: 'Octagonal Glass Room 1', categoryId: 'OGC', categoryName: 'Octagonal Glass Cottage', capacity: 4, capacityLabel: '3–4 Guests' },
+                    { id: 'OGC-2', code: 'OGC-2', name: 'Octagonal Glass Room 2', categoryId: 'OGC', categoryName: 'Octagonal Glass Cottage', capacity: 4, capacityLabel: '3–4 Guests' },
+                    { id: 'OGC-3', code: 'OGC-3', name: 'Octagonal Glass Room 3', categoryId: 'OGC', categoryName: 'Octagonal Glass Cottage', capacity: 4, capacityLabel: '3–4 Guests' }
+                ]
+            },
+            {
+                id: 'LH',
+                name: '2-Storey Luxury House',
+                tagline: 'Premium 2-Storey Villa • 3 Rooms • 4 Guests Accommodation in Each Room',
+                badgeText: '4 Guests / Room (12 Total)',
+                icon: 'fa-landmark',
+                accentColor: 'indigo',
+                allowWholeCottage: true,
+                rooms: [
+                    { id: 'LH-1', code: 'LH-1', name: 'Luxury House Room 1', categoryId: 'LH', categoryName: '2-Storey Luxury House', capacity: 4, capacityLabel: '4 Guests' },
+                    { id: 'LH-2', code: 'LH-2', name: 'Luxury House Room 2', categoryId: 'LH', categoryName: '2-Storey Luxury House', capacity: 4, capacityLabel: '4 Guests' },
+                    { id: 'LH-3', code: 'LH-3', name: 'Luxury House Room 3', categoryId: 'LH', categoryName: '2-Storey Luxury House', capacity: 4, capacityLabel: '4 Guests' }
+                ]
+            },
+            {
+                id: 'WC',
+                name: 'Wooden Cottage',
+                tagline: 'Warm Pinewood Suites • 2 Rooms • 5 Guests Accommodation in Each Room',
+                badgeText: '5 Guests / Room (10 Total)',
+                icon: 'fa-tree',
+                accentColor: 'amber',
+                allowWholeCottage: true,
+                rooms: [
+                    { id: 'WC-1', code: 'WC-1', name: 'Wooden Cottage Room 1', categoryId: 'WC', categoryName: 'Wooden Cottage', capacity: 5, capacityLabel: '5 Guests' },
+                    { id: 'WC-2', code: 'WC-2', name: 'Wooden Cottage Room 2', categoryId: 'WC', categoryName: 'Wooden Cottage', capacity: 5, capacityLabel: '5 Guests' }
+                ]
+            }
+        ];
+
+        const ALL_ROOMS = ACCOMMODATION_TYPES.flatMap(cat => cat.rooms);
+
+        // -------------------------------------------------------------------------
+        // APPLICATION STATE
+        // -------------------------------------------------------------------------
+        let app = null;
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let messaging = null;
+        let firebaseReady = false;
+        let bookingsUnsubscribe = null;
+        const appId = 'meghbitan-homestay-app';
+
+        let bookings = [];
+        let activeBookings = [];
+        let directoryBookings = [];
+        let directoryPageCursors = [];
+        let directoryPageIndex = 0;
+        let directoryHasNextPage = false;
+        let directoryLoading = false;
+        let directoryRequestId = 0;
+        let totalBookingCount = 0;
+        let tomorrowArrivalsCount = 0;
+        let tomorrowCountRequestId = 0;
+        const directoryPageSize = 50;
+        let masterPin = '1234'; // Loaded from owner security config in Firestore
+        let isVaultUnlocked = false;
+        let enteredPin = '';
+
+        // Date filter state (YYYY-MM-DD)
+        let selectedDateStr = getTodayDateString();
+        let currentVoucherBookingId = null;
+        let firedReminderKeysSession = new Set(); // Prevents spamming the same reminder sound every 30s
+
+        // -------------------------------------------------------------------------
+        // DATE & FORMATTING HELPERS
+        // -------------------------------------------------------------------------
+        function getTodayDateString() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function addDaysToDateString(dateStr, daysToAdd) {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const dt = new Date(y, m - 1, d);
+            dt.setDate(dt.getDate() + daysToAdd);
+            const ny = dt.getFullYear();
+            const nm = String(dt.getMonth() + 1).padStart(2, '0');
+            const nd = String(dt.getDate()).padStart(2, '0');
+            return `${ny}-${nm}-${nd}`;
+        }
+
+        function formatReadableDate(dateStr) {
+            if (!dateStr) return '--';
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const dt = new Date(y, m - 1, d);
+            return dt.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        }
+
+        function calculateNights(checkIn, checkOut) {
+            if (!checkIn || !checkOut) return 1;
+            const [y1, m1, d1] = checkIn.split('-').map(Number);
+            const [y2, m2, d2] = checkOut.split('-').map(Number);
+            const diff = (new Date(y2, m2 - 1, d2) - new Date(y1, m1 - 1, d1)) / (1000 * 60 * 60 * 24);
+            return Math.max(1, Math.round(diff));
+        }
+
+        function formatINR(num) {
+            const n = Number(num) || 0;
+            return '₹' + n.toLocaleString('en-IN');
+        }
+
+        /**
+         * Checks if a room is occupied on a target date (YYYY-MM-DD).
+         * Standard hospitality rule: occupied if checkIn <= targetDate < checkOut
+         * (Also handles same-day stay if checkIn === checkOut === targetDate)
+         */
+        function isBookingOccupyingDate(booking, targetDate) {
+            if (!booking || booking.status === 'CANCELLED') return false;
+            if (booking.checkIn === booking.checkOut) {
+                return booking.checkIn === targetDate;
+            }
+            return targetDate >= booking.checkIn && targetDate < booking.checkOut;
+        }
+
+        function getActiveBookingForRoomOnDate(roomId, targetDate) {
+            return bookings.find(b =>
+                Array.isArray(b.roomIds) &&
+                b.roomIds.includes(roomId) &&
+                isBookingOccupyingDate(b, targetDate)
+            ) || null;
+        }
+
+        /**
+         * Checks if two date ranges overlap for room conflict detection
+         */
+        function doDateRangesOverlap(startA, endA, startB, endB) {
+            const effectiveEndA = startA === endA ? addDaysToDateString(endA, 1) : endA;
+            const effectiveEndB = startB === endB ? addDaysToDateString(endB, 1) : endB;
+            return startA < effectiveEndB && effectiveEndA > startB;
+        }
+
+        // -------------------------------------------------------------------------
+        // SOUND SYNTHESIS FOR REMINDER ALERTS (Web Audio API - No external files)
+        // -------------------------------------------------------------------------
+        function playNotificationChime() {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                const ctx = new AudioCtx();
+                const now = ctx.currentTime;
+
+                // Pleasant two-tone hospitality chime
+                const freqs = [587.33, 880]; // D5 -> A5
+                freqs.forEach((f, idx) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(f, now + idx * 0.16);
+                    gain.gain.setValueAtTime(0.18, now + idx * 0.16);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.16 + 0.45);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now + idx * 0.16);
+                    osc.stop(now + idx * 0.16 + 0.46);
+                });
+            } catch (e) {
+                // Ignore audio errors if user hasn't interacted yet
+            }
+        }
+
+        // -------------------------------------------------------------------------
+        // FIREBASE INITIALIZATION & PRIVATE OWNER DATA SYNC
+        // -------------------------------------------------------------------------
+        async function initFirebaseAndData() {
+            try {
+                const firebaseConfig = window.MEGHBITAN_FIREBASE_CONFIG;
+                if (!firebaseConfig || !firebaseConfig.apiKey || firebaseConfig.apiKey.includes('REPLACE_')) {
+                    throw new Error('Firebase is not configured. Complete firebase-config.js before using the booking system.');
+                }
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                try {
+                    messaging = await isSupported() ? getMessaging(app) : null;
+                } catch (pushError) {
+                    console.warn('Browser push messaging is unavailable; database access remains enabled.', pushError);
+                    messaging = null;
+                }
+                firebaseReady = true;
+                document.getElementById('ownerAuthStatus').textContent = 'Secure sign-in required. No local-only mode is available.';
+                if (messaging) {
+                    onMessage(messaging, (payload) => {
+                        const title = payload.notification?.title || payload.data?.title || 'Meghbitan Homestay Reminder';
+                        const body = payload.notification?.body || payload.data?.body || 'A scheduled booking reminder is due.';
+                        if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body });
+                    });
+                }
+
+                onAuthStateChanged(auth, async (user) => {
+                    currentUser = user;
+                    document.getElementById('ownerAuthOverlay').classList.toggle('hidden', Boolean(user));
+                    document.getElementById('securityLockOverlay').classList.toggle('hidden', !user);
+                    document.getElementById('authStatusBadge').innerHTML = user
+                        ? '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Private Cloud Vault Connected'
+                        : '<span class="w-2 h-2 rounded-full bg-amber-400"></span> Sign-in required';
+                    document.getElementById('ownerUidShort').textContent = user
+                        ? `Owner ID: ${user.uid.slice(0, 8)}...`
+                        : 'Protected owner account';
+                    if (user) {
+                        try {
+                            await loadOwnerSecuritySettings();
+                            subscribeToOwnerBookings();
+                            updatePushStatus();
+                            await loadBookingDirectoryPage();
+                        } catch (error) {
+                            console.error('Owner data initialization failed:', error);
+                            showToast('Could not load owner data. Check your connection and Firebase access.', 'error');
+                        }
+                    } else {
+                        if (bookingsUnsubscribe) {
+                            bookingsUnsubscribe();
+                            bookingsUnsubscribe = null;
+                        }
+                        directoryRequestId += 1;
+                        tomorrowCountRequestId += 1;
+                        directoryPageIndex = 0;
+                        directoryHasNextPage = false;
+                        directoryLoading = false;
+                        directoryPageCursors = [];
+                        activeBookings = [];
+                        directoryBookings = [];
+                        directoryPageCursors = [];
+                        totalBookingCount = 0;
+                        tomorrowArrivalsCount = 0;
+                        syncBookingState();
+                        bookings = [];
+                        renderAllViews();
+                    }
+                });
+            } catch (err) {
+                console.error('Firebase initialization failed:', err);
+                firebaseReady = false;
+                document.getElementById('authStatusBadge').innerHTML =
+                    '<span class="w-2 h-2 rounded-full bg-rose-400"></span> Cloud setup required';
+                document.getElementById('ownerAuthOverlay').classList.remove('hidden');
+                document.getElementById('ownerAuthStatus').textContent = err.message;
+            }
+        }
+
+        async function loadOwnerSecuritySettings() {
+            if (!currentUser || !db) throw new Error('Owner authentication is required.');
+            const secDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'security', 'ownerConfig');
+            const snap = await getDoc(secDocRef);
+            if (snap.exists() && snap.data().masterPin) {
+                masterPin = String(snap.data().masterPin);
+                document.getElementById('lockModeSubtitle').textContent =
+                    "Enter your custom 4-digit Master Security PIN to unlock Meghbitan's booking console.";
+            }
+        }
+
+        function subscribeToOwnerBookings() {
+            if (!currentUser || !db) throw new Error('Owner authentication is required.');
+            if (bookingsUnsubscribe) bookingsUnsubscribe();
+            const startDate = selectedDateStr;
+            const endDate = addDaysToDateString(startDate, 6);
+            const colRef = query(
+                collection(db, 'artifacts', appId, 'users', currentUser.uid, 'bookings'),
+                where('status', '==', 'CONFIRMED'),
+                where('checkIn', '<=', endDate),
+                where('checkOut', '>=', startDate)
+            );
+            bookingsUnsubscribe = onSnapshot(
+                colRef,
+                (snapshot) => {
+                    activeBookings = snapshot.docs.map(toBookingRecord);
+                    syncBookingState();
+                    renderAllViews();
+                    evaluateRemindersEngine(false);
+                    refreshTomorrowArrivalsCount();
+                },
+                (error) => {
+                    console.error('Firestore bookings listener error:', error);
+                    showToast('Cloud sync failed. Changes are disabled until the database connection is restored.', 'error');
+                }
+            );
+        }
+
+        async function refreshTomorrowArrivalsCount() {
+            if (!currentUser || !db) return;
+            const requestId = ++tomorrowCountRequestId;
+            const tomorrow = addDaysToDateString(getTodayDateString(), 1);
+            const bookingCollection = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'bookings');
+            try {
+                const snapshot = await getCountFromServer(query(
+                    bookingCollection,
+                    where('status', '==', 'CONFIRMED'),
+                    where('checkIn', '==', tomorrow)
+                ));
+                if (requestId !== tomorrowCountRequestId || !currentUser) return;
+                tomorrowArrivalsCount = snapshot.data().count;
+                updateKPIs();
+            } catch (error) {
+                if (requestId !== tomorrowCountRequestId) return;
+                console.error('Tomorrow arrivals count query failed:', error);
+                showToast('Tomorrow’s arrival count could not be refreshed from Firestore.', 'error');
+            }
+        }
+
+        function toBookingRecord(docSnap) {
+            const data = docSnap.data();
+            let reminders = [];
+            if (typeof data.remindersJson === 'string') {
+                try {
+                    reminders = JSON.parse(data.remindersJson);
+                } catch (error) {
+                    console.error('Stored booking reminders are invalid:', docSnap.id, error);
+                    showToast(`Reminder data for booking ${docSnap.id} could not be loaded.`, 'error');
+                }
+            } else if (Array.isArray(data.reminders)) {
+                reminders = data.reminders;
+            }
+            return {
+                ...data,
+                id: docSnap.id,
+                roomIds: Array.isArray(data.roomIds) ? data.roomIds : [],
+                reminders
+            };
+        }
+
+        function syncBookingState() {
+            const merged = new Map();
+            directoryBookings.forEach((booking) => merged.set(booking.id, booking));
+            activeBookings.forEach((booking) => merged.set(booking.id, booking));
+            bookings = Array.from(merged.values());
+        }
+
+        window.resetBookingDirectory = function () {
+            directoryPageIndex = 0;
+            directoryPageCursors = [];
+            loadBookingDirectoryPage();
+        };
+
+        window.changeBookingPage = function (direction) {
+            if (directoryLoading) return;
+            if (direction < 0 && directoryPageIndex > 0) {
+                directoryPageIndex -= 1;
+                loadBookingDirectoryPage();
+                return;
+            }
+            if (direction > 0 && directoryHasNextPage) {
+                directoryPageIndex += 1;
+                loadBookingDirectoryPage();
+            }
+        };
+
+        async function loadBookingDirectoryPage() {
+            if (!currentUser || !db) return;
+            const requestId = ++directoryRequestId;
+            const status = document.getElementById('bookingPageStatus');
+            status.textContent = 'Loading booking records…';
+            directoryLoading = true;
+            directoryBookings = [];
+            syncBookingState();
+            renderBookingsDirectory();
+            document.getElementById('previousBookingsPageButton').disabled = true;
+            document.getElementById('nextBookingsPageButton').disabled = true;
+            const bookingCollection = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'bookings');
+            const filter = document.getElementById('bookingStatusFilter')?.value || 'ALL';
+            const constraints = [where('status', '==', 'CONFIRMED')];
+            const today = getTodayDateString();
+            if (filter === 'UPCOMING') constraints.push(where('checkOut', '>=', today));
+            if (filter === 'PAST') constraints.push(where('checkOut', '<', today));
+            if (filter === 'TOMORROW') constraints.push(where('checkIn', '==', addDaysToDateString(today, 1)));
+            constraints.push(orderBy('checkIn', 'desc'));
+            if (directoryPageIndex > 0) constraints.push(startAfter(directoryPageCursors[directoryPageIndex]));
+            constraints.push(limit(directoryPageSize));
+
+            try {
+                const [snapshot, countSnapshot] = await Promise.all([
+                    getDocs(query(bookingCollection, ...constraints)),
+                    getCountFromServer(query(bookingCollection, where('status', '==', 'CONFIRMED')))
+                ]);
+                if (requestId !== directoryRequestId) return;
+                directoryLoading = false;
+                totalBookingCount = countSnapshot.data().count;
+                directoryBookings = snapshot.docs.map(toBookingRecord);
+                directoryHasNextPage = directoryBookings.length === directoryPageSize;
+                if (directoryHasNextPage) directoryPageCursors[directoryPageIndex + 1] = snapshot.docs[snapshot.docs.length - 1];
+                syncBookingState();
+                renderBookingsDirectory();
+                status.textContent = `Page ${directoryPageIndex + 1} • ${totalBookingCount.toLocaleString()} confirmed bookings total • ${directoryPageSize} per page`;
+                document.getElementById('previousBookingsPageButton').disabled = directoryPageIndex === 0;
+                document.getElementById('nextBookingsPageButton').disabled = !directoryHasNextPage;
+                updateKPIs();
+            } catch (error) {
+                if (requestId !== directoryRequestId) return;
+                directoryLoading = false;
+                console.error('Booking directory query failed:', error);
+                status.textContent = 'Could not load bookings. Check database access and connection, then retry.';
+                renderBookingsDirectory();
+                showToast('Booking history could not be loaded from Firestore.', 'error');
+            }
+        }
+
+        function reminderDueAt(checkIn, daysPrior, time) {
+            const triggerDate = addDaysToDateString(checkIn, -Number(daysPrior || 0));
+            const [year, month, day] = triggerDate.split('-').map(Number);
+            const [hour, minute] = (time || '09:00').split(':').map(Number);
+            return Timestamp.fromDate(new Date(Date.UTC(year, month - 1, day, hour, minute) - (330 * 60 * 1000)));
+        }
+
+        function saveBookingReminders(transaction, bookingObj, remindersCollection, previousReminders, previousReminderDocuments) {
+            const activeReminderIds = new Set((bookingObj.reminders || []).map((reminder) => reminder.id));
+            (bookingObj.reminders || []).forEach((reminder) => {
+                const reminderRef = doc(remindersCollection, reminder.id);
+                const previous = previousReminderDocuments.get(reminder.id)?.data();
+                const dueAt = reminderDueAt(bookingObj.checkIn, reminder.daysPrior, reminder.time);
+                const scheduleUnchanged = previous?.dueAt instanceof Timestamp && previous.dueAt.isEqual(dueAt);
+                transaction.set(reminderRef, {
+                    ownerUid: currentUser.uid,
+                    bookingId: bookingObj.id,
+                    guestName: bookingObj.guestName,
+                    checkIn: bookingObj.checkIn,
+                    roomIds: bookingObj.roomIds,
+                    guestsCount: bookingObj.guestsCount,
+                    label: reminder.label || '',
+                    dueAt,
+                    acknowledged: scheduleUnchanged && Boolean(reminder.acknowledged || previous.acknowledged),
+                    sentAt: scheduleUnchanged ? previous.sentAt || null : null,
+                    nextAttemptAt: scheduleUnchanged ? previous.nextAttemptAt || dueAt : dueAt
+                });
+            });
+            previousReminders.forEach((reminder) => {
+                if (!activeReminderIds.has(reminder.id)) {
+                    transaction.delete(doc(remindersCollection, reminder.id));
+                }
+            });
+        }
+
+        function getBookedDateStrings(checkIn, checkOut) {
+            const isValidDate = (value) => {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+                const parsed = new Date(`${value}T00:00:00.000Z`);
+                return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+            };
+            if (!isValidDate(checkIn) || !isValidDate(checkOut) || checkOut < checkIn) {
+                throw new Error('Enter a valid check-in and check-out date.');
+            }
+            const lastOccupiedDate = checkIn === checkOut ? checkIn : addDaysToDateString(checkOut, -1);
+            const dates = [];
+            for (let date = checkIn; date <= lastOccupiedDate; date = addDaysToDateString(date, 1)) {
+                dates.push(date);
+            }
+            return dates;
+        }
+
+        function getRoomLockReferences(roomIds, dates, locksCollection) {
+            return roomIds.flatMap((roomId) => dates.map((date) => ({
+                roomId,
+                date,
+                ref: doc(locksCollection, `${roomId}_${date}`)
+            })));
+        }
+
+        async function persistBookingToCloud(bookingObj) {
+            if (!firebaseReady || !currentUser || !db) throw new Error('Cloud database is unavailable. Booking was not saved.');
+            const previousBooking = bookings.find((booking) => booking.id === bookingObj.id);
+            const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bookings', bookingObj.id);
+            const payload = {
+                ...bookingObj,
+                remindersJson: JSON.stringify(bookingObj.reminders || [])
+            };
+            const userPath = ['artifacts', appId, 'users', currentUser.uid];
+            const remindersCollection = collection(docRef, 'reminders');
+            const locksCollection = collection(db, ...userPath, 'roomLocks');
+            const requestedDates = getBookedDateStrings(bookingObj.checkIn, bookingObj.checkOut);
+            const newLocks = getRoomLockReferences(bookingObj.roomIds, requestedDates, locksCollection);
+            if (!bookingObj.roomIds.length) throw new Error('Select at least one room before saving.');
+            if (newLocks.length > 450) {
+                throw new Error('This stay contains too many room-nights to save safely in one transaction. Shorten the stay or select fewer rooms.');
+            }
+
+            const isNewBooking = await runTransaction(db, async (transaction) => {
+                const currentDoc = await transaction.get(docRef);
+                const currentBooking = currentDoc.exists() ? currentDoc.data() : null;
+                const previousDates = currentBooking
+                    ? getBookedDateStrings(currentBooking.checkIn, currentBooking.checkOut)
+                    : [];
+                const oldLocks = currentBooking
+                    ? getRoomLockReferences(currentBooking.roomIds || [], previousDates, locksCollection)
+                    : [];
+                const locksByPath = new Map([...newLocks, ...oldLocks].map((lock) => [lock.ref.path, lock]));
+                const allLocks = Array.from(locksByPath.values());
+                const activeReminders = bookingObj.reminders || [];
+                if (allLocks.length + activeReminders.length + 1 > 500) {
+                    throw new Error('This booking update exceeds Firestore transaction limits. Shorten the stay or reduce selected rooms.');
+                }
+                const lockSnapshots = await Promise.all(allLocks.map((lock) => transaction.get(lock.ref)));
+                const reminderSnapshots = await Promise.all(activeReminders.map((reminder) =>
+                    transaction.get(doc(remindersCollection, reminder.id))
+                ));
+                const existingLocks = new Map(lockSnapshots.map((snapshot) => [snapshot.ref.path, snapshot]));
+                const existingReminders = new Map(reminderSnapshots.map((snapshot) => [snapshot.id, snapshot]));
+                const requestedLockPaths = new Set(newLocks.map((lock) => lock.ref.path));
+                const conflict = newLocks.find((lock) => {
+                    const snapshot = existingLocks.get(lock.ref.path);
+                    return snapshot?.exists() && snapshot.data().bookingId !== bookingObj.id;
+                });
+                if (conflict) {
+                    throw new Error(`${conflict.roomId} is already booked on ${formatReadableDate(conflict.date)}. Refresh the room grid and choose different rooms.`);
+                }
+
+                let previousReminders = [];
+                if (Array.isArray(currentBooking?.reminders)) {
+                    previousReminders = currentBooking.reminders;
+                } else if (currentBooking?.remindersJson) {
+                    try {
+                        previousReminders = JSON.parse(currentBooking.remindersJson);
+                    } catch (error) {
+                        throw new Error(`Existing reminder data for booking ${bookingObj.id} is invalid; booking was not changed.`);
+                    }
+                }
+                const activeReminderIds = new Set((bookingObj.reminders || []).map((reminder) => reminder.id));
+                const reminderDeletes = previousReminders.filter((reminder) => !activeReminderIds.has(reminder.id)).length;
+                const releasedLocks = oldLocks.filter((lock) => !requestedLockPaths.has(lock.ref.path) &&
+                    existingLocks.get(lock.ref.path)?.exists() &&
+                    existingLocks.get(lock.ref.path).data().bookingId === bookingObj.id);
+                if (newLocks.length + releasedLocks.length + (bookingObj.reminders?.length || 0) +
+                    reminderDeletes + 1 > 450) {
+                    throw new Error('This booking has too many room-nights or reminders to save safely. Shorten the stay or reduce selected rooms/reminders.');
+                }
+
+                newLocks.forEach((lock) => transaction.set(lock.ref, {
+                    bookingId: bookingObj.id,
+                    roomId: lock.roomId,
+                    date: lock.date,
+                    guestName: bookingObj.guestName
+                }));
+                releasedLocks.forEach((lock) => transaction.delete(lock.ref));
+                saveBookingReminders(transaction, bookingObj, remindersCollection, previousReminders, existingReminders);
+                transaction.set(docRef, {
+                    ...payload,
+                    createdAt: currentDoc.exists() ? (currentDoc.data().createdAt || new Date().toISOString()) : new Date().toISOString()
+                });
+                return !currentDoc.exists();
+            });
+            if (isNewBooking) totalBookingCount += 1;
+            const tomorrow = addDaysToDateString(getTodayDateString(), 1);
+            if (previousBooking?.checkIn === tomorrow && bookingObj.checkIn !== tomorrow) {
+                tomorrowArrivalsCount = Math.max(0, tomorrowArrivalsCount - 1);
+            } else if (previousBooking?.checkIn !== tomorrow && bookingObj.checkIn === tomorrow) {
+                tomorrowArrivalsCount += 1;
+            }
+            directoryBookings = [bookingObj, ...directoryBookings.filter((booking) => booking.id !== bookingObj.id)]
+                .slice(0, directoryPageSize);
+            syncBookingState();
+            renderAllViews();
+        }
+
+        async function removeBookingFromCloud(bookingId) {
+            if (!firebaseReady || !currentUser || !db) throw new Error('Cloud database is unavailable. Booking was not deleted.');
+            const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bookings', bookingId);
+            const locksCollection = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'roomLocks');
+            const removedBooking = bookings.find((booking) => booking.id === bookingId);
+            await runTransaction(db, async (transaction) => {
+                const bookingSnapshot = await transaction.get(docRef);
+                if (!bookingSnapshot.exists()) return;
+                const booking = bookingSnapshot.data();
+                const dates = getBookedDateStrings(booking.checkIn, booking.checkOut);
+                const locks = getRoomLockReferences(booking.roomIds || [], dates, locksCollection);
+                let reminders = [];
+                if (Array.isArray(booking.reminders)) {
+                    reminders = booking.reminders;
+                } else if (booking.remindersJson) {
+                    try {
+                        reminders = JSON.parse(booking.remindersJson);
+                    } catch (error) {
+                        throw new Error(`Reminder data for booking ${bookingId} is invalid; booking was not deleted.`);
+                    }
+                }
+                if (locks.length + reminders.length + 1 > 450) {
+                    throw new Error('This booking has too many room-nights or reminders to delete safely in one transaction.');
+                }
+                const lockSnapshots = await Promise.all(locks.map((lock) => transaction.get(lock.ref)));
+                locks.forEach((lock, index) => {
+                    if (lockSnapshots[index].exists() && lockSnapshots[index].data().bookingId === bookingId) {
+                        transaction.delete(lock.ref);
+                    }
+                });
+                reminders.forEach((reminder) => transaction.delete(doc(collection(docRef, 'reminders'), reminder.id)));
+                transaction.delete(docRef);
+            });
+            activeBookings = activeBookings.filter((booking) => booking.id !== bookingId);
+            directoryBookings = directoryBookings.filter((booking) => booking.id !== bookingId);
+            totalBookingCount = Math.max(0, totalBookingCount - 1);
+            if (removedBooking?.checkIn === addDaysToDateString(getTodayDateString(), 1)) {
+                tomorrowArrivalsCount = Math.max(0, tomorrowArrivalsCount - 1);
+            }
+            syncBookingState();
+            renderAllViews();
+        }
+
+        window.signInOwner = async function (event) {
+            event.preventDefault();
+            const button = document.getElementById('ownerSignInButton');
+            const error = document.getElementById('ownerAuthError');
+            error.textContent = '';
+            if (!firebaseReady || !auth) {
+                error.textContent = 'Firebase setup is incomplete. Follow the deployment guide before signing in.';
+                return;
+            }
+            button.disabled = true;
+            try {
+                await signInWithEmailAndPassword(
+                    auth,
+                    document.getElementById('ownerEmail').value.trim(),
+                    document.getElementById('ownerPassword').value
+                );
+                document.getElementById('ownerPassword').value = '';
+            } catch (signInError) {
+                console.error('Owner sign-in failed:', signInError);
+                error.textContent = 'Sign-in failed. Check your credentials and Firebase Authentication configuration.';
+            } finally {
+                button.disabled = false;
+            }
+        };
+
+        window.signOutOwner = async function () {
+            if (!auth) return;
+            try {
+                await signOut(auth);
+                lockSystemNow();
+            } catch (error) {
+                console.error('Owner sign-out failed:', error);
+                showToast('Could not sign out. Please try again.', 'error');
+            }
+        };
+
+        function updatePushStatus() {
+            const status = document.getElementById('browserNotifStatusText');
+            if (!messaging || !('serviceWorker' in navigator)) {
+                status.textContent = 'Push notifications are not supported by this browser.';
+            } else if (Notification.permission === 'granted') {
+                status.textContent = 'Device push permission granted. Enable this device to receive alerts.';
+            } else {
+                status.textContent = 'Enable device alerts to receive reminders while the app is closed.';
+            }
+        }
+
+        window.enableDevicePush = async function () {
+            if (!currentUser || !messaging || !('serviceWorker' in navigator)) {
+                showToast('Sign in using a supported browser over HTTPS to enable push alerts.', 'error');
+                return;
+            }
+            try {
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') throw new Error('Notification permission was not granted.');
+                const registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+                const token = await getToken(messaging, {
+                    vapidKey: window.MEGHBITAN_FIREBASE_VAPID_KEY,
+                    serviceWorkerRegistration: registration
+                });
+                if (!token) throw new Error('Firebase did not provide a device push token.');
+                const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+                const tokenId = Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('');
+                await setDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'deviceTokens', tokenId), {
+                    token,
+                    updatedAt: new Date().toISOString(),
+                    userAgent: navigator.userAgent
+                });
+                updatePushStatus();
+                showToast('Device push alerts are enabled for this device.', 'success');
+            } catch (error) {
+                console.error('Device push setup failed:', error);
+                showToast(error.message || 'Could not enable device alerts.', 'error');
+            }
+        };
+
+        // -------------------------------------------------------------------------
+        // OWNER PIN LOCK SCREEN LOGIC
+        // -------------------------------------------------------------------------
+        window.pressPinKey = function (digit) {
+            if (enteredPin.length >= 4) return;
+            enteredPin += digit;
+            updatePinDotsUI();
+            if (enteredPin.length === 4) {
+                setTimeout(verifyEnteredPin, 120);
+            }
+        };
+
+        window.backspacePinKey = function () {
+            enteredPin = enteredPin.slice(0, -1);
+            document.getElementById('pinErrorMsg').textContent = '';
+            updatePinDotsUI();
+        };
+
+        window.clearPinInput = function () {
+            enteredPin = '';
+            document.getElementById('pinErrorMsg').textContent = '';
+            updatePinDotsUI();
+        };
+
+        function updatePinDotsUI() {
+            for (let i = 0; i < 4; i++) {
+                const dotEl = document.getElementById(`pinDot${i}`);
+                if (i < enteredPin.length) {
+                    dotEl.textContent = '●';
+                    dotEl.className = 'w-12 h-14 rounded-xl bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center text-2xl font-bold text-emerald-300';
+                } else {
+                    dotEl.textContent = '•';
+                    dotEl.className = 'w-12 h-14 rounded-xl bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-2xl font-bold text-slate-600';
+                }
+            }
+        }
+
+        function verifyEnteredPin() {
+            if (enteredPin === masterPin) {
+                isVaultUnlocked = true;
+                enteredPin = '';
+                updatePinDotsUI();
+                document.getElementById('securityLockOverlay').classList.add('hidden');
+                showToast('Welcome back! Meghbitan Owner Portal Unlocked.', 'success');
+                evaluateRemindersEngine(true);
+            } else {
+                document.getElementById('pinErrorMsg').textContent = 'Invalid Security PIN. Access Denied.';
+                enteredPin = '';
+                updatePinDotsUI();
+            }
+        }
+
+        window.lockSystemNow = function () {
+            isVaultUnlocked = false;
+            enteredPin = '';
+            updatePinDotsUI();
+            document.getElementById('securityLockOverlay').classList.remove('hidden');
+        };
+
+        // Keyboard support for PIN lock screen
+        window.addEventListener('keydown', (e) => {
+            if (!isVaultUnlocked) {
+                if (e.key >= '0' && e.key <= '9') {
+                    window.pressPinKey(e.key);
+                } else if (e.key === 'Backspace') {
+                    window.backspacePinKey();
+                } else if (e.key === 'Escape') {
+                    window.clearPinInput();
+                }
+            }
+        });
+
+        // Security Settings Modal (Change PIN)
+        window.openSecurityModal = function () {
+            document.getElementById('currentPinInput').value = '';
+            document.getElementById('newPinInput').value = '';
+            document.getElementById('pinChangeFeedback').textContent = '';
+            document.getElementById('securitySettingsModal').classList.remove('hidden');
+        };
+
+        window.closeSecurityModal = function () {
+            document.getElementById('securitySettingsModal').classList.add('hidden');
+        };
+
+        window.saveNewMasterPin = async function (e) {
+            e.preventDefault();
+            const curr = document.getElementById('currentPinInput').value.trim();
+            const next = document.getElementById('newPinInput').value.trim();
+            const feedback = document.getElementById('pinChangeFeedback');
+
+            if (curr !== masterPin) {
+                feedback.textContent = 'Current PIN does not match.';
+                feedback.className = 'text-xs font-semibold text-center text-rose-600';
+                return;
+            }
+            if (!/^\d{4}$/.test(next)) {
+                feedback.textContent = 'New PIN must be exactly 4 digits.';
+                feedback.className = 'text-xs font-semibold text-center text-rose-600';
+                return;
+            }
+
+            if (!currentUser || !db) {
+                feedback.textContent = 'Sign in before changing security settings.';
+                feedback.className = 'text-xs font-semibold text-center text-rose-600';
+                return;
+            }
+            try {
+                const secDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'security', 'ownerConfig');
+                await setDoc(secDocRef, { masterPin: next, updatedAt: new Date().toISOString() });
+            } catch (err) {
+                console.error('Error saving PIN:', err);
+                feedback.textContent = 'Could not save the new PIN. Your previous PIN is still active.';
+                feedback.className = 'text-xs font-semibold text-center text-rose-600';
+                return;
+            }
+            masterPin = next;
+            showToast('Master Security PIN updated successfully!', 'success');
+            closeSecurityModal();
+        };
+
+        // -------------------------------------------------------------------------
+        // DATE BAR & MAIN TAB NAVIGATION
+        // -------------------------------------------------------------------------
+        window.handleDateChange = function (newDateVal) {
+            if (!newDateVal) return;
+            selectedDateStr = newDateVal;
+            updateDateBarUI();
+            if (currentUser) subscribeToOwnerBookings();
+            renderAllViews();
+        };
+
+        window.shiftSelectedDate = function (days) {
+            selectedDateStr = addDaysToDateString(selectedDateStr, days);
+            updateDateBarUI();
+            if (currentUser) subscribeToOwnerBookings();
+            renderAllViews();
+        };
+
+        window.setQuickDate = function (offsetDays) {
+            selectedDateStr = addDaysToDateString(getTodayDateString(), offsetDays);
+            updateDateBarUI();
+            if (currentUser) subscribeToOwnerBookings();
+            renderAllViews();
+        };
+
+        function updateDateBarUI() {
+            const picker = document.getElementById('selectedDatePicker');
+            if (picker) picker.value = selectedDateStr;
+            document.getElementById('selectedDateReadable').textContent = formatReadableDate(selectedDateStr);
+
+            const todayStr = getTodayDateString();
+            const tomorrowStr = addDaysToDateString(todayStr, 1);
+            const btnToday = document.getElementById('btnQuickToday');
+            const btnTomorrow = document.getElementById('btnQuickTomorrow');
+
+            if (selectedDateStr === todayStr) {
+                btnToday.className = 'px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white transition';
+            } else {
+                btnToday.className = 'px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition';
+            }
+
+            if (selectedDateStr === tomorrowStr) {
+                btnTomorrow.className = 'px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white transition';
+            } else {
+                btnTomorrow.className = 'px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition';
+            }
+        }
+
+        window.switchMainTab = function (tabName) {
+            const secRooms = document.getElementById('sectionRoomsGrid');
+            const secTimeline = document.getElementById('sectionTimelineMatrix');
+            const secBookings = document.getElementById('sectionBookingsDirectory');
+
+            const btnRooms = document.getElementById('tabBtnRooms');
+            const btnTimeline = document.getElementById('tabBtnTimeline');
+            const btnBookings = document.getElementById('tabBtnBookings');
+
+            secRooms.classList.add('hidden');
+            secTimeline.classList.add('hidden');
+            secBookings.classList.add('hidden');
+
+            btnRooms.className = 'px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 transition flex items-center gap-1.5';
+            btnTimeline.className = 'px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 transition flex items-center gap-1.5';
+            btnBookings.className = 'px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 transition flex items-center gap-1.5';
+
+            if (tabName === 'rooms') {
+                secRooms.classList.remove('hidden');
+                btnRooms.className = 'px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-slate-900 shadow-xs transition flex items-center gap-1.5';
+            } else if (tabName === 'timeline') {
+                secTimeline.classList.remove('hidden');
+                btnTimeline.className = 'px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-slate-900 shadow-xs transition flex items-center gap-1.5';
+                renderTimelineMatrix();
+            } else if (tabName === 'bookings') {
+                secBookings.classList.remove('hidden');
+                btnBookings.className = 'px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-slate-900 shadow-xs transition flex items-center gap-1.5';
+                renderBookingsDirectory();
+            }
+        };
+
+        // -------------------------------------------------------------------------
+        // RENDER KPI CARDS & GREEN/RED ACCOMMODATION ROOM GRID
+        // -------------------------------------------------------------------------
+        function renderAllViews() {
+            updateKPIs();
+            renderAccommodationsGrid();
+            renderTimelineMatrix();
+            renderBookingsDirectory();
+            renderNotificationsDrawer();
+        }
+
+        function updateKPIs() {
+            let bookedCount = 0;
+            ALL_ROOMS.forEach(room => {
+                if (getActiveBookingForRoomOnDate(room.id, selectedDateStr)) {
+                    bookedCount++;
+                }
+            });
+            const vacantCount = ALL_ROOMS.length - bookedCount;
+
+            document.getElementById('kpiVacantCount').textContent = vacantCount;
+            document.getElementById('kpiBookedCount').textContent = bookedCount;
+            document.getElementById('kpiTomorrowArrivals').textContent = tomorrowArrivalsCount.toLocaleString();
+            document.getElementById('totalBookingsCountTab').textContent = totalBookingCount.toLocaleString();
+        }
+
+        function renderAccommodationsGrid() {
+            const container = document.getElementById('accommodationsContainer');
+            if (!container) return;
+
+            container.innerHTML = ACCOMMODATION_TYPES.map(cat => {
+                // Count vacant rooms in this category on selectedDateStr
+                const vacantRoomsInCat = cat.rooms.filter(r => !getActiveBookingForRoomOnDate(r.id, selectedDateStr));
+                const allVacantInCat = vacantRoomsInCat.length === cat.rooms.length;
+
+                const roomCardsHtml = cat.rooms.map(room => {
+                    const activeBooking = getActiveBookingForRoomOnDate(room.id, selectedDateStr);
+
+                    if (!activeBooking) {
+                        // ===============================================================
+                        // VACANT ROOM CARD — EMERALD GREEN
+                        // ===============================================================
+                        return `
+              <div
+                onclick="openBookingModalForNew(['${room.id}'])"
+                class="room-card-vacant cursor-pointer rounded-2xl bg-gradient-to-br from-emerald-50 via-emerald-100/70 to-teal-50 border-2 border-emerald-500 p-5 flex flex-col justify-between relative overflow-hidden group"
+              >
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-emerald-600 text-white shadow-xs">
+                      <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span> VACANT • AVAILABLE
+                    </span>
+                    <h4 class="text-base sm:text-lg font-extrabold text-emerald-950 mt-2.5">${room.name}</h4>
+                    <p class="text-xs font-medium text-emerald-800/80">Room Code: <span class="font-mono font-bold">${room.code}</span></p>
+                  </div>
+                  <div class="w-11 h-11 rounded-2xl bg-emerald-600/15 border border-emerald-500/30 text-emerald-700 flex items-center justify-center shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition">
+                    <i class="fa-solid fa-door-open text-lg"></i>
+                  </div>
+                </div>
+
+                <div class="my-4 py-3 px-3.5 rounded-xl bg-white/80 border border-emerald-200/90 flex items-center justify-between">
+                  <div class="flex items-center gap-2 text-xs font-bold text-slate-700">
+                    <i class="fa-solid fa-users text-emerald-600"></i>
+                    <span>Capacity: ${room.capacityLabel}</span>
+                  </div>
+                  <span class="text-[11px] font-semibold text-emerald-700">Ready for Check-In</span>
+                </div>
+
+                <div class="flex items-center justify-between pt-1">
+                  <span class="text-xs font-semibold text-emerald-900">Date: ${formatReadableDate(selectedDateStr)}</span>
+                  <span class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 group-hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition">
+                    <i class="fa-solid fa-plus"></i> Click to Book
+                  </span>
+                </div>
+              </div>
+            `;
+                    } else {
+                        // ===============================================================
+                        // BOOKED / OCCUPIED ROOM CARD — CRIMSON RED
+                        // ===============================================================
+                        const balance = Math.max(0, (Number(activeBooking.totalAmount) || 0) - (Number(activeBooking.advancePaid) || 0));
+                        const reminderCount = Array.isArray(activeBooking.reminders) ? activeBooking.reminders.length : 0;
+
+                        return `
+              <div
+                onclick="openVoucherPreview('${activeBooking.id}')"
+                class="room-card-booked cursor-pointer rounded-2xl bg-gradient-to-br from-rose-50 via-red-100/70 to-rose-100 border-2 border-rose-600 p-5 flex flex-col justify-between relative overflow-hidden group"
+              >
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-rose-600 text-white shadow-xs">
+                      <i class="fa-solid fa-lock text-[10px]"></i> BOOKED • OCCUPIED
+                    </span>
+                    <h4 class="text-base sm:text-lg font-extrabold text-rose-950 mt-2.5">${room.name}</h4>
+                    <p class="text-xs font-medium text-rose-800/80">Code: <span class="font-mono font-bold">${room.code}</span> • ID: #${activeBooking.id.slice(-5).toUpperCase()}</p>
+                  </div>
+                  <div class="w-11 h-11 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <i class="fa-solid fa-user-check text-base"></i>
+                  </div>
+                </div>
+
+                <!-- Guest Details Box Inside Red Card -->
+                <div class="my-3.5 p-3.5 rounded-xl bg-white/95 border border-rose-300 shadow-2xs space-y-1.5">
+                  <div class="flex items-center justify-between gap-2">
+                    <p class="text-sm font-extrabold text-slate-900 truncate">
+                      <i class="fa-solid fa-user text-rose-600 mr-1"></i> ${escapeHtml(activeBooking.guestName)}
+                    </p>
+                    <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 font-bold text-[11px] shrink-0">
+                      ${activeBooking.guestsCount} Pax
+                    </span>
+                  </div>
+                  <p class="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                    <i class="fa-solid fa-phone text-emerald-600"></i> ${escapeHtml(activeBooking.guestPhone)}
+                  </p>
+                  <div class="text-[11px] font-semibold text-slate-700 pt-1 border-t border-slate-100 flex items-center justify-between">
+                    <span><i class="fa-regular fa-calendar mr-1 text-rose-600"></i> ${formatReadableDate(activeBooking.checkIn)} → ${formatReadableDate(activeBooking.checkOut)}</span>
+                  </div>
+                  <div class="flex items-center justify-between pt-1 text-[11px]">
+                    <span class="font-bold text-slate-600">Total: ${formatINR(activeBooking.totalAmount)}</span>
+                    <span class="font-extrabold ${balance > 0 ? 'text-rose-600' : 'text-emerald-700'}">
+                      ${balance > 0 ? 'Due: ' + formatINR(balance) : 'Fully Paid'}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Quick Action Buttons on Booked Card -->
+                <div class="flex flex-wrap items-center justify-between gap-1.5 pt-1" onclick="event.stopPropagation()">
+                  <button onclick="openVoucherPreview('${activeBooking.id}')" class="flex-1 py-2 px-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] flex items-center justify-center gap-1 shadow-xs transition">
+                    <i class="fa-solid fa-file-pdf"></i> PDF / Share
+                  </button>
+                  <button onclick="openBookingModalForEdit('${activeBooking.id}')" class="py-2 px-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-800 font-bold text-[11px] border border-rose-300 transition" title="Edit Guest / Reminders">
+                    <i class="fa-solid fa-pen"></i> Edit
+                  </button>
+                  <button onclick="quickWhatsAppGuest('${activeBooking.id}')" class="py-2 px-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-[11px] transition" title="WhatsApp Guest">
+                    <i class="fa-brands fa-whatsapp"></i>
+                  </button>
+                  <span class="px-2 py-1.5 rounded-lg bg-amber-100 text-amber-900 font-bold text-[10px]" title="${reminderCount} Arrival Reminder(s) Set">
+                    <i class="fa-solid fa-bell"></i> ${reminderCount}
+                  </span>
+                </div>
+              </div>
+            `;
+                    }
+                }).join('');
+
+                return `
+          <div class="bg-white rounded-3xl shadow-xs border border-slate-200/90 overflow-hidden">
+            <!-- Category Header -->
+            <div class="px-5 py-4 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-emerald-400">
+                  <i class="fa-solid ${cat.icon} text-lg"></i>
+                </div>
+                <div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h3 class="text-base sm:text-lg font-bold">${cat.name}</h3>
+                    <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                      ${cat.badgeText}
+                    </span>
+                  </div>
+                  <p class="text-xs text-slate-400 mt-0.5">${cat.tagline}</p>
+                </div>
+              </div>
+
+              <!-- Quick Book Entire Property Button if rooms available -->
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold px-3 py-1 rounded-xl ${vacantRoomsInCat.length > 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}">
+                  ${vacantRoomsInCat.length} of ${cat.rooms.length} Vacant
+                </span>
+                ${allVacantInCat ? `
+                  <button
+                    onclick="openBookingModalForNew(${JSON.stringify(cat.rooms.map(r => r.id)).replace(/"/g, '&quot;')})"
+                    class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-xs"
+                  >
+                    + Book All ${cat.rooms.length} Rooms
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+
+            <!-- Category Rooms Grid -->
+            <div class="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              ${roomCardsHtml}
+            </div>
+          </div>
+        `;
+            }).join('');
+        }
+
+        // -------------------------------------------------------------------------
+        // RENDER 7-DAY MULTI-ROOM OCCUPANCY MATRIX
+        // -------------------------------------------------------------------------
+        function renderTimelineMatrix() {
+            const wrapper = document.getElementById('timelineTableWrapper');
+            if (!wrapper) return;
+
+            const days = [];
+            for (let i = 0; i < 7; i++) {
+                days.push(addDaysToDateString(selectedDateStr, i));
+            }
+
+            const headerCols = days.map(d => {
+                const isToday = d === getTodayDateString();
+                return `
+          <th class="p-2.5 text-center border border-slate-200 min-w-[115px] ${isToday ? 'bg-emerald-900 text-white' : 'bg-slate-100 text-slate-700'}">
+            <div class="text-[11px] font-bold">${formatReadableDate(d)}</div>
+          </th>
+        `;
+            }).join('');
+
+            const rowsHtml = ALL_ROOMS.map(room => {
+                const cells = days.map(d => {
+                    const b = getActiveBookingForRoomOnDate(room.id, d);
+                    if (!b) {
+                        return `
+              <td
+                onclick="openBookingModalForDateAndRoom('${d}', '${room.id}')"
+                class="p-2 border border-slate-200 bg-emerald-50 hover:bg-emerald-100 cursor-pointer text-center transition"
+              >
+                <span class="inline-block px-2 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[10px]">
+                  VACANT
+                </span>
+              </td>
+            `;
+                    } else {
+                        return `
+              <td
+                onclick="openVoucherPreview('${b.id}')"
+                class="p-2 border border-slate-200 bg-rose-50 hover:bg-rose-100 cursor-pointer text-center transition"
+              >
+                <div class="px-2 py-1 rounded-lg bg-rose-600 text-white font-bold text-[10px] truncate max-w-[110px] mx-auto">
+                  ${escapeHtml(b.guestName)}
+                </div>
+                <div class="text-[10px] font-semibold text-rose-800 mt-0.5">${b.guestsCount} Pax</div>
+              </td>
+            `;
+                    }
+                }).join('');
+
+                return `
+          <tr>
+            <td class="p-3 border border-slate-200 bg-slate-50 font-bold text-xs text-slate-800 whitespace-nowrap">
+              <div>${room.name}</div>
+              <div class="text-[10px] text-slate-500 font-normal">${room.categoryName} (${room.capacityLabel})</div>
+            </td>
+            ${cells}
+          </tr>
+        `;
+            }).join('');
+
+            wrapper.innerHTML = `
+        <table class="w-full border-collapse text-xs">
+          <thead>
+            <tr>
+              <th class="p-3 text-left border border-slate-200 bg-slate-100 font-bold text-slate-700">Room / Accommodation</th>
+              ${headerCols}
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      `;
+        }
+
+        window.openBookingModalForDateAndRoom = function (dateStr, roomId) {
+            selectedDateStr = dateStr;
+            updateDateBarUI();
+            if (currentUser) subscribeToOwnerBookings();
+            openBookingModalForNew([roomId]);
+        };
+
+        // -------------------------------------------------------------------------
+        // RENDER ALL BOOKINGS DIRECTORY TABLE
+        // -------------------------------------------------------------------------
+        window.renderBookingsDirectory = function () {
+            const tbody = document.getElementById('bookingsTableBody');
+            if (!tbody) return;
+
+            const queryText = (document.getElementById('bookingSearchInput')?.value || '').toLowerCase().trim();
+            const statusFilter = document.getElementById('bookingStatusFilter')?.value || 'ALL';
+            const todayStr = getTodayDateString();
+            const tomorrowStr = addDaysToDateString(todayStr, 1);
+
+            if (directoryLoading) {
+                tbody.innerHTML = '<tr><td colspan="7" class="py-10 text-center text-slate-400">Loading bookings from the secure database…</td></tr>';
+                return;
+            }
+
+            const filtered = directoryBookings.filter(b => {
+                if (b.status === 'CANCELLED') return false;
+                if (statusFilter === 'UPCOMING' && b.checkOut < todayStr) return false;
+                if (statusFilter === 'TOMORROW' && b.checkIn !== tomorrowStr) return false;
+                if (statusFilter === 'PAST' && b.checkOut >= todayStr) return false;
+
+                if (queryText) {
+                    const hay = `${b.id} ${b.guestName} ${b.guestPhone} ${(b.roomIds || []).join(' ')} ${b.guestAddress || ''}`.toLowerCase();
+                    return hay.includes(queryText);
+                }
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="py-10 text-center text-slate-400">
+              <i class="fa-regular fa-folder-open text-2xl mb-2 block"></i>
+              No bookings match your current filter. Click "+ New Booking" or any Green room card to add one.
+            </td>
+          </tr>
+        `;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(b => {
+                const balance = Math.max(0, (Number(b.totalAmount) || 0) - (Number(b.advancePaid) || 0));
+                const roomBadges = (b.roomIds || []).map(rid => {
+                    const rObj = ALL_ROOMS.find(r => r.id === rid);
+                    return `<span class="inline-block px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 font-bold text-[10px] mr-1 mb-1">${rObj ? rObj.name : rid}</span>`;
+                }).join('');
+
+                const remList = Array.isArray(b.reminders) ? b.reminders : [];
+                const remSummary = remList.length > 0
+                    ? remList.map(r => `<span class="inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-semibold text-[10px] mr-1 mb-1"><i class="fa-regular fa-bell mr-0.5"></i>${r.daysPrior}d prior @ ${r.time}</span>`).join('')
+                    : `<span class="text-slate-400 text-[11px]">None</span>`;
+
+                return `
+          <tr class="hover:bg-slate-50/80 transition">
+            <td class="py-3 px-3">
+              <div class="font-bold text-slate-900">${escapeHtml(b.guestName)}</div>
+              <div class="text-[11px] text-slate-500"><i class="fa-solid fa-phone text-[10px] mr-1"></i>${escapeHtml(b.guestPhone)} • <span class="font-mono">#${b.id.slice(-5).toUpperCase()}</span></div>
+            </td>
+            <td class="py-3 px-3">${roomBadges}</td>
+            <td class="py-3 px-3 font-semibold text-slate-700 whitespace-nowrap">
+              <div class="text-emerald-700">In: ${formatReadableDate(b.checkIn)}</div>
+              <div class="text-rose-700">Out: ${formatReadableDate(b.checkOut)}</div>
+            </td>
+            <td class="py-3 px-3">
+              <div class="font-bold text-slate-800">${b.guestsCount} Guests</div>
+              <div class="text-[10px] text-slate-500">${escapeHtml(b.mealPlan || '')}</div>
+            </td>
+            <td class="py-3 px-3 whitespace-nowrap">
+              <div class="font-bold text-slate-900">Total: ${formatINR(b.totalAmount)}</div>
+              <div class="text-[11px] font-bold ${balance > 0 ? 'text-rose-600' : 'text-emerald-700'}">
+                Adv: ${formatINR(b.advancePaid)} | Due: ${formatINR(balance)}
+              </div>
+            </td>
+            <td class="py-3 px-3">${remSummary}</td>
+            <td class="py-3 px-3 text-right whitespace-nowrap space-x-1">
+              <button onclick="openVoucherPreview('${b.id}')" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px]" title="Download PDF & Share">
+                <i class="fa-solid fa-file-pdf mr-1"></i>Voucher
+              </button>
+              <button onclick="openBookingModalForEdit('${b.id}')" class="px-2.5 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[11px]" title="Edit Booking">
+                <i class="fa-solid fa-pen"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+            }).join('');
+        };
+
+        // -------------------------------------------------------------------------
+        // BOOKING MODAL (ADD / EDIT + OPTIONAL CUSTOM REMINDERS BUILDER)
+        // -------------------------------------------------------------------------
+        function renderModalRoomCheckboxes(selectedRoomIds = []) {
+            const container = document.getElementById('modalRoomCheckboxes');
+            if (!container) return;
+
+            container.innerHTML = ALL_ROOMS.map(room => {
+                const checked = selectedRoomIds.includes(room.id) ? 'checked' : '';
+                return `
+          <label class="flex items-start gap-2 p-2.5 rounded-xl border border-slate-200 bg-white hover:border-emerald-500 cursor-pointer transition text-xs">
+            <input
+              type="checkbox"
+              name="modalRoomCheckbox"
+              value="${room.id}"
+              ${checked}
+              onchange="validateModalRoomConflicts()"
+              class="mt-0.5 w-4 h-4 accent-emerald-600 rounded"
+            />
+            <div>
+              <span class="font-bold text-slate-900 block">${room.name}</span>
+              <span class="text-[10px] text-slate-500">${room.categoryName} • ${room.capacityLabel}</span>
+            </div>
+          </label>
+        `;
+            }).join('');
+            validateModalRoomConflicts();
+        }
+
+        window.selectEntireCategory = function (catId) {
+            const cat = ACCOMMODATION_TYPES.find(c => c.id === catId);
+            if (!cat) return;
+            const catRoomIds = cat.rooms.map(r => r.id);
+            const checkboxes = document.querySelectorAll('input[name="modalRoomCheckbox"]');
+            checkboxes.forEach(cb => {
+                if (catRoomIds.includes(cb.value)) cb.checked = true;
+            });
+            if (catId === 'OGC') {
+                document.getElementById('formGuestsCount').value = 11;
+            }
+            validateModalRoomConflicts();
+        };
+
+        window.validateModalRoomConflicts = function () {
+            const editingId = document.getElementById('editingBookingId').value;
+            const checkIn = document.getElementById('formCheckIn').value;
+            const checkOut = document.getElementById('formCheckOut').value;
+            const selectedRoomIds = Array.from(document.querySelectorAll('input[name="modalRoomCheckbox"]:checked')).map(cb => cb.value);
+
+            // Update capacity hint
+            const totalCap = selectedRoomIds.reduce((sum, rid) => {
+                const r = ALL_ROOMS.find(x => x.id === rid);
+                return sum + (r ? r.capacity : 0);
+            }, 0);
+            document.getElementById('selectedRoomsCapacityHint').textContent = `Cap: ~${totalCap || 4} Pax`;
+
+            const warnEl = document.getElementById('roomConflictWarning');
+            if (!checkIn || !checkOut || selectedRoomIds.length === 0) {
+                warnEl.classList.add('hidden');
+                return true;
+            }
+
+            if (checkOut < checkIn) {
+                warnEl.textContent = 'Check-Out date cannot be earlier than Check-In date.';
+                warnEl.classList.remove('hidden');
+                return false;
+            }
+
+            // Check overlap against existing bookings
+            const conflicting = bookings.find(b => {
+                if (b.id === editingId || b.status === 'CANCELLED') return false;
+                const sharesRoom = (b.roomIds || []).some(rid => selectedRoomIds.includes(rid));
+                if (!sharesRoom) return false;
+                return doDateRangesOverlap(checkIn, checkOut, b.checkIn, b.checkOut);
+            });
+
+            if (conflicting) {
+                warnEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i> Room conflict detected: One or more selected rooms are already booked by <strong>${escapeHtml(conflicting.guestName)}</strong> (${formatReadableDate(conflicting.checkIn)} to ${formatReadableDate(conflicting.checkOut)}).`;
+                warnEl.classList.remove('hidden');
+                return false;
+            }
+
+            warnEl.classList.add('hidden');
+            return true;
+        };
+
+        window.updateBalanceCalculation = function () {
+            const total = Number(document.getElementById('formTotalAmount').value) || 0;
+            const adv = Number(document.getElementById('formAdvancePaid').value) || 0;
+            const bal = Math.max(0, total - adv);
+            document.getElementById('formBalanceDue').value = formatINR(bal);
+        };
+
+        // Custom Reminders Dynamic Builder inside Booking Modal
+        window.toggleCustomRemindersSection = function () {
+            const enabled = document.getElementById('formEnableCustomReminders').checked;
+            const box = document.getElementById('customRemindersBuilderBox');
+            if (enabled) {
+                box.classList.remove('hidden');
+                const container = document.getElementById('customReminderRowsContainer');
+                if (container.children.length === 0) {
+                    addCustomReminderRow(2, '10:00', 'Pre-arrival follow-up & cab check');
+                }
+            } else {
+                box.classList.add('hidden');
+            }
+        };
+
+        window.setCustomReminderCount = function (countVal) {
+            const targetCount = parseInt(countVal, 10) || 1;
+            const container = document.getElementById('customReminderRowsContainer');
+            const currentCount = container.children.length;
+
+            if (targetCount > currentCount) {
+                for (let i = currentCount; i < targetCount; i++) {
+                    const defaultDays = i === 0 ? 2 : i === 1 ? 3 : i + 2;
+                    addCustomReminderRow(defaultDays, '10:00', '');
+                }
+            } else if (targetCount < currentCount) {
+                while (container.children.length > targetCount) {
+                    container.removeChild(container.lastElementChild);
+                }
+            }
+        };
+
+        window.addCustomReminderRow = function (daysPrior = 2, timeStr = '10:00', noteStr = '', reminderId = '') {
+            const container = document.getElementById('customReminderRowsContainer');
+            const rowIndex = container.children.length + 1;
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'custom-reminder-row flex flex-wrap sm:flex-nowrap items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs';
+            rowDiv.dataset.reminderId = reminderId;
+            rowDiv.innerHTML = `
+        <span class="font-bold text-indigo-700 shrink-0">#${rowIndex}</span>
+        <div class="flex items-center gap-1.5">
+          <input type="number" min="0" max="60" value="${daysPrior}" class="rem-days-input w-16 px-2 py-1.5 rounded-lg border border-slate-300 font-bold text-center bg-white" />
+          <span class="text-slate-600 font-medium whitespace-nowrap">Days Before Arrival</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="text-slate-500">at</span>
+          <input type="time" value="${timeStr}" class="rem-time-input px-2.5 py-1.5 rounded-lg border border-slate-300 font-bold bg-white" />
+        </div>
+        <input type="text" value="${escapeHtml(noteStr)}" placeholder="Optional note (e.g. Call guest for meal preference)" class="rem-note-input flex-1 min-w-[140px] px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white" />
+        <button type="button" onclick="this.parentElement.remove()" class="p-1.5 text-rose-500 hover:text-rose-700" title="Remove Reminder">
+          <i class="fa-solid fa-trash-can"></i>
+        </button>
+      `;
+            container.appendChild(rowDiv);
+        };
+
+        window.openBookingModalForNew = function (preselectedRoomIds = []) {
+            document.getElementById('editingBookingId').value = '';
+            document.getElementById('bookingModalTitle').textContent = 'New Room Booking — Meghbitan Homestay';
+            document.getElementById('bookingModalSubtitle').textContent = 'Assign room(s), enter guest details & configure arrival notifications';
+            document.getElementById('deleteBookingBtnWrapper').classList.add('hidden');
+
+            const checkInDefault = selectedDateStr;
+            const checkOutDefault = addDaysToDateString(selectedDateStr, 2);
+
+            document.getElementById('formCheckIn').value = checkInDefault;
+            document.getElementById('formCheckOut').value = checkOutDefault;
+            document.getElementById('formGuestName').value = '';
+            document.getElementById('formGuestPhone').value = '';
+            document.getElementById('formGuestAddress').value = '';
+            document.getElementById('formGuestIdProof').value = '';
+            document.getElementById('formMealPlan').value = 'All Meals Included (Homestay AP Plan)';
+            document.getElementById('formTotalAmount').value = preselectedRoomIds.length > 1 ? preselectedRoomIds.length * 4000 : 4500;
+            document.getElementById('formAdvancePaid').value = 2000;
+            document.getElementById('formPaymentMode').value = 'UPI / GPay / PhonePe';
+            document.getElementById('formSpecialNotes').value = '';
+
+            // Default guests count based on room selection
+            if (preselectedRoomIds.length === 1) {
+                const r = ALL_ROOMS.find(x => x.id === preselectedRoomIds[0]);
+                document.getElementById('formGuestsCount').value = r ? r.capacity : 4;
+            } else if (preselectedRoomIds.length > 1) {
+                document.getElementById('formGuestsCount').value = preselectedRoomIds.length * 4;
+            } else {
+                document.getElementById('formGuestsCount').value = 4;
+            }
+
+            // Reset Reminder Controls (Default 1-day prior ON, Custom Optional OFF)
+            document.getElementById('formDefaultOneDayReminder').checked = true;
+            document.getElementById('formDefaultOneDayTime').value = '09:00';
+            document.getElementById('formEnableCustomReminders').checked = false;
+            document.getElementById('customRemindersBuilderBox').classList.add('hidden');
+            document.getElementById('customReminderRowsContainer').innerHTML = '';
+
+            renderModalRoomCheckboxes(preselectedRoomIds);
+            updateBalanceCalculation();
+            document.getElementById('bookingFormModal').classList.remove('hidden');
+        };
+
+        window.openBookingModalForEdit = function (bookingId) {
+            const b = bookings.find(x => x.id === bookingId);
+            if (!b) return;
+
+            document.getElementById('editingBookingId').value = b.id;
+            document.getElementById('bookingModalTitle').textContent = `Edit Booking — ${b.guestName}`;
+            document.getElementById('bookingModalSubtitle').textContent = `Booking ID: #${b.id.slice(-5).toUpperCase()}`;
+            document.getElementById('deleteBookingBtnWrapper').classList.remove('hidden');
+
+            document.getElementById('formCheckIn').value = b.checkIn;
+            document.getElementById('formCheckOut').value = b.checkOut;
+            document.getElementById('formGuestsCount').value = b.guestsCount || 2;
+            document.getElementById('formGuestName').value = b.guestName || '';
+            document.getElementById('formGuestPhone').value = b.guestPhone || '';
+            document.getElementById('formGuestAddress').value = b.guestAddress || '';
+            document.getElementById('formGuestIdProof').value = b.guestIdProof || '';
+            document.getElementById('formMealPlan').value = b.mealPlan || 'All Meals Included (Homestay AP Plan)';
+            document.getElementById('formTotalAmount').value = b.totalAmount || 0;
+            document.getElementById('formAdvancePaid').value = b.advancePaid || 0;
+            document.getElementById('formPaymentMode').value = b.paymentMode || 'UPI / GPay / PhonePe';
+            document.getElementById('formSpecialNotes').value = b.specialNotes || '';
+
+            // Populate reminders
+            const rems = Array.isArray(b.reminders) ? b.reminders : [];
+            const defaultRem = rems.find(r => r.isDefaultOneDay);
+            const customRems = rems.filter(r => !r.isDefaultOneDay);
+
+            document.getElementById('formDefaultOneDayReminder').checked = Boolean(defaultRem);
+            document.getElementById('formDefaultOneDayTime').value = defaultRem ? defaultRem.time : '09:00';
+
+            const container = document.getElementById('customReminderRowsContainer');
+            container.innerHTML = '';
+            if (customRems.length > 0) {
+                document.getElementById('formEnableCustomReminders').checked = true;
+                document.getElementById('customRemindersBuilderBox').classList.remove('hidden');
+                customRems.forEach(cr => {
+                    addCustomReminderRow(cr.daysPrior, cr.time, cr.label || '', cr.id);
+                });
+            } else {
+                document.getElementById('formEnableCustomReminders').checked = false;
+                document.getElementById('customRemindersBuilderBox').classList.add('hidden');
+            }
+
+            renderModalRoomCheckboxes(b.roomIds || []);
+            updateBalanceCalculation();
+            document.getElementById('bookingFormModal').classList.remove('hidden');
+        };
+
+        window.closeBookingModal = function () {
+            document.getElementById('bookingFormModal').classList.add('hidden');
+        };
+
+        window.saveBookingForm = async function (e) {
+            e.preventDefault();
+            const selectedRoomIds = Array.from(document.querySelectorAll('input[name="modalRoomCheckbox"]:checked')).map(cb => cb.value);
+            if (selectedRoomIds.length === 0) {
+                showToast('Please select at least one room to book.', 'error');
+                return;
+            }
+
+            if (!validateModalRoomConflicts()) {
+                showToast('Please resolve the room date conflict before saving.', 'error');
+                return;
+            }
+
+            const editingId = document.getElementById('editingBookingId').value;
+            const bookingId = editingId || ('mb_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+            const oldReminders = bookings.find((booking) => booking.id === editingId)?.reminders || [];
+
+            // Collect optional reminders (Standard 1-Day Prior + Custom Reminders)
+            const reminders = [];
+            if (document.getElementById('formDefaultOneDayReminder').checked) {
+                const defTime = document.getElementById('formDefaultOneDayTime').value || '09:00';
+                reminders.push({
+                    id: 'rem_def_1d',
+                    daysPrior: 1,
+                    time: defTime,
+                    label: '1-Day Prior Arrival Notification',
+                    isDefaultOneDay: true,
+                    acknowledged: Boolean(oldReminders.find((reminder) => reminder.id === 'rem_def_1d')?.acknowledged)
+                });
+            }
+
+            if (document.getElementById('formEnableCustomReminders').checked) {
+                const rows = document.querySelectorAll('#customReminderRowsContainer .custom-reminder-row');
+                rows.forEach((row, idx) => {
+                    const daysVal = parseInt(row.querySelector('.rem-days-input')?.value, 10);
+                    const timeVal = row.querySelector('.rem-time-input')?.value || '10:00';
+                    const noteVal = row.querySelector('.rem-note-input')?.value?.trim() || '';
+                    if (!isNaN(daysVal) && daysVal >= 0) {
+                        const reminderId = row.dataset.reminderId || `rem_cust_${idx}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+                        const previousReminder = oldReminders.find((reminder) => reminder.id === reminderId);
+                        reminders.push({
+                            id: reminderId,
+                            daysPrior: daysVal,
+                            time: timeVal,
+                            label: noteVal || `Custom Reminder (${daysVal} day(s) prior)`,
+                            isDefaultOneDay: false,
+                            acknowledged: Boolean(previousReminder?.acknowledged)
+                        });
+                    }
+                });
+            }
+
+            const bookingObj = {
+                id: bookingId,
+                roomIds: selectedRoomIds,
+                checkIn: document.getElementById('formCheckIn').value,
+                checkOut: document.getElementById('formCheckOut').value,
+                guestsCount: Number(document.getElementById('formGuestsCount').value) || 2,
+                guestName: document.getElementById('formGuestName').value.trim(),
+                guestPhone: document.getElementById('formGuestPhone').value.trim(),
+                guestAddress: document.getElementById('formGuestAddress').value.trim(),
+                guestIdProof: document.getElementById('formGuestIdProof').value.trim(),
+                mealPlan: document.getElementById('formMealPlan').value,
+                totalAmount: Number(document.getElementById('formTotalAmount').value) || 0,
+                advancePaid: Number(document.getElementById('formAdvancePaid').value) || 0,
+                paymentMode: document.getElementById('formPaymentMode').value,
+                specialNotes: document.getElementById('formSpecialNotes').value.trim(),
+                reminders,
+                status: 'CONFIRMED',
+                updatedAt: new Date().toISOString()
+            };
+
+            const submitBtn = document.getElementById('saveBookingSubmitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Saving...`;
+
+            try {
+                await persistBookingToCloud(bookingObj);
+                closeBookingModal();
+                showToast(`Booking saved for ${bookingObj.guestName}! Opening Voucher...`, 'success');
+                openVoucherPreview(bookingObj.id);
+            } catch (err) {
+                console.error('Save booking error:', err);
+                showToast(err.message || 'Failed to save booking. Please try again.', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> <span>Save Booking & Generate Voucher</span>`;
+            }
+        };
+
+        // Delete / Vacate Booking with Custom Confirmation Modal
+        window.confirmDeleteBooking = function () {
+            const editingId = document.getElementById('editingBookingId').value;
+            const b = bookings.find(x => x.id === editingId);
+            if (!b) return;
+
+            document.getElementById('confirmModalTitle').textContent = 'Vacate Room / Cancel Booking?';
+            document.getElementById('confirmModalMessage').textContent =
+                `This will remove ${b.guestName}'s booking and mark the room(s) as GREEN (Vacant) immediately.`;
+            const acceptBtn = document.getElementById('confirmModalAcceptBtn');
+            acceptBtn.onclick = async () => {
+                acceptBtn.disabled = true;
+                try {
+                    await removeBookingFromCloud(editingId);
+                    closeCustomConfirm();
+                    closeBookingModal();
+                    showToast('Room marked as Vacant (Green).', 'info');
+                } catch (error) {
+                    console.error('Booking deletion failed:', error);
+                    showToast(error.message || 'Could not delete booking.', 'error');
+                } finally {
+                    acceptBtn.disabled = false;
+                }
+            };
+            document.getElementById('customConfirmModal').classList.remove('hidden');
+        };
+
+        window.closeCustomConfirm = function () {
+            document.getElementById('customConfirmModal').classList.add('hidden');
+        };
+
+        // -------------------------------------------------------------------------
+        // VOUCHER PREVIEW, CLIENT-SIDE PDF DOWNLOAD & DIRECT UI / WHATSAPP SHARING
+        // -------------------------------------------------------------------------
+        window.openVoucherPreview = function (bookingId) {
+            const b = bookings.find(x => x.id === bookingId);
+            if (!b) return;
+            currentVoucherBookingId = b.id;
+
+            const nights = calculateNights(b.checkIn, b.checkOut);
+            const balance = Math.max(0, (Number(b.totalAmount) || 0) - (Number(b.advancePaid) || 0));
+
+            document.getElementById('vBookingId').textContent = `Booking ID: #MB-${b.id.slice(-6).toUpperCase()}`;
+            document.getElementById('vIssuedDate').textContent = `Updated: ${new Date(b.updatedAt || Date.now()).toLocaleDateString('en-IN')}`;
+            document.getElementById('vGuestName').textContent = b.guestName;
+            document.getElementById('vGuestPhone').textContent = `Phone / WhatsApp: ${b.guestPhone}`;
+            document.getElementById('vGuestAddress').textContent = b.guestAddress ? `Address: ${b.guestAddress}` : (b.guestIdProof ? `ID Proof: ${b.guestIdProof}` : 'Verified Guest');
+
+            document.getElementById('vCheckIn').textContent = formatReadableDate(b.checkIn);
+            document.getElementById('vCheckOut').textContent = formatReadableDate(b.checkOut);
+            document.getElementById('vNightsAndPax').textContent = `${nights} Night(s) • ${b.guestsCount} Guests (Pax)`;
+
+            const roomsHtml = (b.roomIds || []).map(rid => {
+                const r = ALL_ROOMS.find(x => x.id === rid);
+                return `
+          <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+            <div>
+              <span class="font-bold text-slate-900">${r ? r.name : rid}</span>
+              <span class="text-slate-500 ml-1">(${r ? r.categoryName : ''})</span>
+            </div>
+            <span class="font-semibold text-emerald-700">${r ? r.capacityLabel : ''}</span>
+          </div>
+        `;
+            }).join('');
+            document.getElementById('vRoomsList').innerHTML = roomsHtml;
+
+            document.getElementById('vMealPlan').textContent = `Package / Meal Plan: ${b.mealPlan || 'Homestay Plan'}`;
+            document.getElementById('vPaymentMode').textContent = `Mode: ${b.paymentMode || 'UPI'}`;
+            document.getElementById('vTotalTariff').textContent = formatINR(b.totalAmount);
+            document.getElementById('vAdvancePaid').textContent = `- ${formatINR(b.advancePaid)}`;
+            document.getElementById('vBalanceDue').textContent = formatINR(balance);
+            document.getElementById('vSpecialNotes').textContent = b.specialNotes || 'Standard Homestay Hospitality.';
+
+            document.getElementById('voucherPreviewModal').classList.remove('hidden');
+        };
+
+        window.closeVoucherModal = function () {
+            document.getElementById('voucherPreviewModal').classList.add('hidden');
+        };
+
+        window.editCurrentVoucherBooking = function () {
+            if (!currentVoucherBookingId) return;
+            closeVoucherModal();
+            openBookingModalForEdit(currentVoucherBookingId);
+        };
+
+        function buildFormattedBookingText(b) {
+            const nights = calculateNights(b.checkIn, b.checkOut);
+            const balance = Math.max(0, (Number(b.totalAmount) || 0) - (Number(b.advancePaid) || 0));
+            const roomNames = (b.roomIds || []).map(rid => {
+                const r = ALL_ROOMS.find(x => x.id === rid);
+                return r ? `${r.name} (${r.categoryName})` : rid;
+            }).join(', ');
+
+            return (
+                `*MEGHBITAN HOMESTAY (Sittong)*\n` +
+                `*Booking Confirmation Voucher*\n` +
+                `----------------------------------\n` +
+                `*Booking ID:* #MB-${b.id.slice(-6).toUpperCase()}\n` +
+                `*Guest Name:* ${b.guestName}\n` +
+                `*Phone:* ${b.guestPhone}\n` +
+                `*Accommodation:* ${roomNames}\n` +
+                `*Check-In:* ${formatReadableDate(b.checkIn)}\n` +
+                `*Check-Out:* ${formatReadableDate(b.checkOut)} (${nights} Night/s)\n` +
+                `*Total Guests:* ${b.guestsCount} Pax\n` +
+                `*Meal Plan:* ${b.mealPlan}\n` +
+                `----------------------------------\n` +
+                `*Total Tariff:* ${formatINR(b.totalAmount)}\n` +
+                `*Advance Paid:* ${formatINR(b.advancePaid)}\n` +
+                `*Balance Payable:* ${formatINR(balance)}\n` +
+                `----------------------------------\n` +
+                `We look forward to hosting you at Meghbitan!`
+            );
+        }
+
+        // Download PDF directly using html2pdf.js
+        window.downloadVoucherPDF = async function () {
+            const b = bookings.find(x => x.id === currentVoucherBookingId);
+            if (!b) return;
+            const element = document.getElementById('voucherPrintArea');
+            const btn = document.getElementById('btnDownloadPdf');
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Generating PDF...`;
+
+            try {
+                const cleanName = b.guestName.replace(/[^a-zA-Z0-9]/g, '_');
+                const filename = `Meghbitan_Booking_${cleanName}_${b.checkIn}.pdf`;
+                const opt = {
+                    margin: 8,
+                    filename: filename,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+                await html2pdf().set(opt).from(element).save();
+                showToast('Booking Voucher PDF downloaded!', 'success');
+            } catch (err) {
+                console.error('PDF generation error:', err);
+                showToast('Could not generate PDF. Try again.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-file-pdf"></i> Download PDF`;
+            }
+        };
+
+        // Share directly from UI (Supports native PDF file sharing on supported devices or summary text)
+        window.shareBookingFromUI = async function () {
+            const b = bookings.find(x => x.id === currentVoucherBookingId);
+            if (!b) return;
+            const summaryText = buildFormattedBookingText(b);
+
+            try {
+                // Attempt to generate PDF blob and share via Web Share API if supported
+                if (navigator.share) {
+                    const element = document.getElementById('voucherPrintArea');
+                    const cleanName = b.guestName.replace(/[^a-zA-Z0-9]/g, '_');
+                    const filename = `Meghbitan_Booking_${cleanName}.pdf`;
+                    const opt = {
+                        margin: 8,
+                        filename: filename,
+                        image: { type: 'jpeg', quality: 0.96 },
+                        html2canvas: { scale: 2, useCORS: true },
+                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                    };
+
+                    const pdfBlob = await html2pdf().set(opt).from(element).output('blob');
+                    const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
+
+                    if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+                        await navigator.share({
+                            title: `Meghbitan Booking — ${b.guestName}`,
+                            text: summaryText,
+                            files: [pdfFile]
+                        });
+                        showToast('Shared PDF Voucher directly from UI!', 'success');
+                        return;
+                    } else {
+                        await navigator.share({
+                            title: `Meghbitan Booking — ${b.guestName}`,
+                            text: summaryText
+                        });
+                        showToast('Booking confirmation shared!', 'success');
+                        return;
+                    }
+                }
+            } catch (err) {
+                // User cancelled native share or iframe restriction; fallback to clipboard copy
+            }
+
+            // Fallback: copy formatted voucher to clipboard
+            copyTextToClipboard(summaryText);
+            showToast('Booking voucher details copied to clipboard for easy sharing!', 'info');
+        };
+
+        window.shareBookingOnWhatsApp = function () {
+            const b = bookings.find(x => x.id === currentVoucherBookingId);
+            if (!b) return;
+            openWhatsAppWithBooking(b);
+        };
+
+        window.quickWhatsAppGuest = function (bookingId) {
+            const b = bookings.find(x => x.id === bookingId);
+            if (!b) return;
+            openWhatsAppWithBooking(b);
+        };
+
+        function openWhatsAppWithBooking(b) {
+            const text = buildFormattedBookingText(b);
+            let digits = (b.guestPhone || '').replace(/\D/g, '');
+            if (digits.length === 10) digits = '91' + digits;
+            const url = `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+            window.open(url, '_blank', 'noopener,noreferrer');
+        }
+
+        function copyTextToClipboard(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); } catch (e) { }
+            document.body.removeChild(ta);
+        }
+
+        // -------------------------------------------------------------------------
+        // NOTIFICATION & REMINDER ENGINE (1-DAY PRIOR + CUSTOM DAYS & TIMING)
+        // -------------------------------------------------------------------------
+        window.toggleNotificationDrawer = function () {
+            const drawer = document.getElementById('notificationDrawer');
+            drawer.classList.toggle('hidden');
+            renderNotificationsDrawer();
+        };
+
+        window.requestBrowserNotificationPermission = async function () {
+            if (!('Notification' in window)) {
+                showToast('Browser notifications are not supported on this device.', 'info');
+                return;
+            }
+            await enableDevicePush();
+        };
+
+        window.triggerTestNotification = async function () {
+            playNotificationChime();
+            if (!currentUser || !db) {
+                showToast('Sign in before testing device push notifications.', 'error');
+                return;
+            }
+            try {
+                const testId = `test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                const testRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'pushTests', testId);
+                await setDoc(testRef, {
+                    status: 'pending',
+                    createdAt: new Date().toISOString()
+                });
+                showToast('Push test queued. The free background scheduler checks about every five minutes.', 'success');
+            } catch (error) {
+                console.error('Push test failed:', error);
+                showToast(error.message || 'Could not queue the push test.', 'error');
+            }
+        };
+
+        /**
+         * Evaluates all scheduled reminders across all upcoming bookings.
+         * Calculates exact trigger Date & Time = (CheckInDate - daysPrior) at reminder.time
+         */
+        function getComputedRemindersList() {
+            const now = new Date();
+            const todayStr = getTodayDateString();
+            const items = [];
+
+            bookings.forEach(b => {
+                if (b.status === 'CANCELLED' || b.checkOut < todayStr) return;
+                const rems = Array.isArray(b.reminders) ? b.reminders : [];
+
+                rems.forEach(r => {
+                    const triggerDateStr = addDaysToDateString(b.checkIn, -(Number(r.daysPrior) || 0));
+                    const timeStr = r.time || '09:00';
+                    const [y, m, d] = triggerDateStr.split('-').map(Number);
+                    const [hh, mm] = timeStr.split(':').map(Number);
+                    const triggerDateObj = new Date(y, m - 1, d, hh || 9, mm || 0, 0);
+
+                    const isDueNow = now >= triggerDateObj && b.checkIn >= todayStr && !r.acknowledged;
+                    const isDueToday = triggerDateStr === todayStr;
+
+                    items.push({
+                        bookingId: b.id,
+                        guestName: b.guestName,
+                        guestPhone: b.guestPhone,
+                        roomIds: b.roomIds || [],
+                        checkIn: b.checkIn,
+                        guestsCount: b.guestsCount,
+                        reminderId: r.id,
+                        daysPrior: r.daysPrior,
+                        time: timeStr,
+                        label: r.label || `${r.daysPrior} Day(s) Before Arrival`,
+                        triggerDateStr,
+                        triggerDateObj,
+                        isDueNow,
+                        isDueToday,
+                        acknowledged: Boolean(r.acknowledged)
+                    });
+                });
+            });
+
+            items.sort((a, b) => a.triggerDateObj - b.triggerDateObj);
+            return items;
+        }
+
+        function evaluateRemindersEngine(forceAnnounce = false) {
+            const allReminders = getComputedRemindersList();
+            const dueReminders = allReminders.filter(r => r.isDueNow);
+            const pendingReminders = allReminders.filter(r => !r.acknowledged);
+
+            // Update KPI & Bell Badge
+            document.getElementById('kpiPendingReminders').textContent = pendingReminders.length;
+            const badge = document.getElementById('notifBadgeCount');
+            if (dueReminders.length > 0) {
+                badge.textContent = dueReminders.length;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            // Urgent Banner at top of Dashboard if any reminder is due or guest arrives tomorrow
+            const banner = document.getElementById('urgentArrivalBanner');
+            if (dueReminders.length > 0) {
+                banner.classList.remove('hidden');
+                const first = dueReminders[0];
+                document.getElementById('urgentBannerHeadline').textContent =
+                    `🔔 Arrival Reminder Due: ${first.guestName} (${first.guestsCount} Pax) — Check-In ${formatReadableDate(first.checkIn)}`;
+                document.getElementById('urgentBannerSubtext').textContent =
+                    `${dueReminders.length} scheduled reminder(s) reached their alert timing (${first.daysPrior} day(s) prior @ ${first.time}).`;
+            } else {
+                banner.classList.add('hidden');
+            }
+
+            // Fire audible + visual toast + browser notification for newly due reminders
+            if (!isVaultUnlocked) return;
+            dueReminders.forEach(rem => {
+                const uniqueKey = `${rem.bookingId}_${rem.reminderId}_${rem.triggerDateStr}_${rem.time}`;
+                if (!firedReminderKeysSession.has(uniqueKey) || forceAnnounce) {
+                    firedReminderKeysSession.add(uniqueKey);
+                    playNotificationChime();
+                    const roomLabels = rem.roomIds.join(', ');
+                    const msg = `🔔 Reminder (${rem.daysPrior}d prior @ ${rem.time}): ${rem.guestName} arriving on ${formatReadableDate(rem.checkIn)} [${roomLabels}]`;
+                    showToast(msg, 'warning');
+
+                }
+            });
+
+            renderNotificationsDrawer();
+        }
+
+        function renderNotificationsDrawer() {
+            const container = document.getElementById('reminderListContainer');
+            if (!container) return;
+
+            const list = getComputedRemindersList();
+            if (list.length === 0) {
+                container.innerHTML = `
+          <div class="text-center py-12 text-slate-400">
+            <i class="fa-regular fa-bell-slash text-3xl mb-2 block"></i>
+            <p class="text-xs font-semibold">No upcoming arrival reminders scheduled.</p>
+            <p class="text-[11px] mt-1">When you add a booking, the 1-Day Prior Alert and any optional custom reminders will appear here.</p>
+          </div>
+        `;
+                return;
+            }
+
+            container.innerHTML = list.map(item => {
+                const roomNames = item.roomIds.join(', ');
+                const statusBadge = item.acknowledged
+                    ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">Acknowledged</span>`
+                    : item.isDueNow
+                        ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-600 text-white animate-pulse">DUE NOW</span>`
+                        : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">Scheduled</span>`;
+
+                return `
+          <div class="p-3.5 rounded-2xl border ${item.isDueNow ? 'bg-amber-50 border-amber-400 shadow-xs' : 'bg-white border-slate-200'} space-y-2">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <div class="flex items-center gap-2">
+                  ${statusBadge}
+                  <span class="text-[11px] font-bold text-slate-500">
+                    <i class="fa-regular fa-clock mr-0.5"></i> ${formatReadableDate(item.triggerDateStr)} at ${item.time}
+                  </span>
+                </div>
+                <h4 class="font-bold text-sm text-slate-900 mt-1">${escapeHtml(item.guestName)} (${item.guestsCount} Pax)</h4>
+                <p class="text-xs text-slate-600">Rooms: <span class="font-semibold">${roomNames}</span> • Arriving: <span class="font-bold text-emerald-700">${formatReadableDate(item.checkIn)}</span></p>
+                <p class="text-[11px] text-indigo-700 font-medium mt-0.5">${escapeHtml(item.label)} (${item.daysPrior} day(s) prior)</p>
+              </div>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button onclick="quickWhatsAppGuest('${item.bookingId}')" class="px-2.5 py-1 rounded-lg bg-green-600 hover:bg-green-700 text-white text-[11px] font-bold flex items-center gap-1">
+                <i class="fa-brands fa-whatsapp"></i> WhatsApp Guest
+              </button>
+              ${!item.acknowledged ? `
+                <button onclick="acknowledgeSingleReminder('${item.bookingId}', '${item.reminderId}')" class="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-[11px] font-bold">
+                  <i class="fa-solid fa-check mr-1"></i> Dismiss
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+            }).join('');
+        }
+
+        window.acknowledgeSingleReminder = async function (bookingId, reminderId) {
+            const b = bookings.find(x => x.id === bookingId);
+            if (!b || !Array.isArray(b.reminders)) return;
+            const updated = { ...b, reminders: b.reminders.map(r => r.id === reminderId ? { ...r, acknowledged: true } : r) };
+            try {
+                await persistBookingToCloud(updated);
+                evaluateRemindersEngine(false);
+            } catch (error) {
+                console.error('Could not acknowledge reminder:', error);
+                showToast(error.message || 'Could not acknowledge reminder.', 'error');
+            }
+        };
+
+        window.acknowledgeAllTriggeredReminders = async function () {
+            try {
+                for (const b of bookings) {
+                    if (Array.isArray(b.reminders) && b.reminders.some(r => !r.acknowledged)) {
+                        const updated = { ...b, reminders: b.reminders.map(r => ({ ...r, acknowledged: true })) };
+                        await persistBookingToCloud(updated);
+                    }
+                }
+                evaluateRemindersEngine(false);
+                showToast('All due reminders marked as acknowledged.', 'info');
+            } catch (error) {
+                console.error('Could not acknowledge all reminders:', error);
+                showToast(error.message || 'Could not acknowledge reminders.', 'error');
+            }
+        };
+
+        // Keep foreground reminders responsive; the free server scheduler handles closed apps.
+        setInterval(() => {
+            evaluateRemindersEngine(false);
+        }, 30000);
+
+        // -------------------------------------------------------------------------
+        // UI UTILITIES (TOASTS & HTML ESCAPING)
+        // -------------------------------------------------------------------------
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const colors = {
+                success: 'bg-emerald-900 border-emerald-500 text-white',
+                error: 'bg-rose-900 border-rose-500 text-white',
+                warning: 'bg-amber-950 border-amber-400 text-amber-100',
+                info: 'bg-slate-900 border-slate-600 text-white'
+            };
+
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto p-3.5 rounded-2xl border-l-4 shadow-xl flex items-start justify-between gap-3 text-xs font-medium transition-all duration-300 ${colors[type] || colors.info}`;
+            toast.innerHTML = `
+        <span class="leading-relaxed">${escapeHtml(message)}</span>
+        <button onclick="this.parentElement.remove()" class="text-slate-300 hover:text-white shrink-0">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      `;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                if (toast.parentElement) toast.remove();
+            }, 6000);
+        }
+
+        // -------------------------------------------------------------------------
+        // BOOTSTRAP ON WINDOW LOAD
+        // -------------------------------------------------------------------------
+        window.addEventListener('DOMContentLoaded', () => {
+            updateDateBarUI();
+            renderAllViews();
+            initFirebaseAndData();
+        });
+    </script>
+</body>
+
+</html>

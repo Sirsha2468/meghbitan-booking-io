@@ -1,0 +1,21 @@
+{
+  "name": "meghbitan-homestay-portal",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tailwindcss -i ./src/input.css -o ./styles.css --minify",
+    "dispatch-reminders": "node scripts/dispatch-due-reminders.js"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0"
+  },
+  "overrides": {
+    "@parcel/watcher": "2.6.0"
+  }
+}
